@@ -54,7 +54,7 @@
   const statusText = document.getElementById('status');
   
   let isAtivo = false;
-  let historico = []; // Guarda o contexto da conversa
+  let historico = []; 
 
   // 2. RECONHECIMENTO DE VOZ CONTÍNUO
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -81,10 +81,10 @@
   recognition.onresult = async (event) => {
     const transcricao = event.results[event.results.length - 1][0].transcript.trim();
     if (transcricao) {
-      console.log("Gabriel:", transcricao);
+      console.log("Você disse:", transcricao);
       statusText.innerText = 'Pensando...';
       
-      // Pausa a escuta para não captar a própria voz do Jarvis (evita eco/tokens extras)
+      // Pausa a escuta para não captar a própria voz (evita eco/tokens extras)
       recognition.stop(); 
       
       await enviarParaAPI(transcricao);
@@ -117,11 +117,12 @@
     animate();
   }).catch(err => console.error('Erro de permissão no microfone:', err));
 
-  // 4. CONEXÃO COM API (Gemini 1.5 Flash com Contexto)
+  // 4. CONEXÃO COM API (Versão solicitada: 3.5 Flash)
   async function enviarParaAPI(mensagem) {
     historico.push({ role: "user", parts: [{ text: mensagem }] });
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+    // Endpoint configurado com a versão gemini-3.5-flash conforme solicitado
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${API_KEY}`;
     
     try {
       const response = await fetch(url, {
@@ -136,13 +137,13 @@
       const data = await response.json();
       const respostaJarvis = data.candidates[0].content.parts[0].text;
       
-      // Salva a resposta do Jarvis no histórico para ele lembrar do papo
+      // Salva a resposta do Jarvis no histórico
       historico.push({ role: "model", parts: [{ text: respostaJarvis }] });
       
       falar(respostaJarvis);
     } catch (error) {
       console.error('Erro na API:', error);
-      falar("Desculpe, tive um problema de conexão.");
+      falar("Desculpe, tive um problema de conexão com o servidor.");
     }
   }
 
@@ -158,7 +159,7 @@
     utterance.onend = () => {
        if (isAtivo) {
          statusText.innerText = 'Jarvis ouvindo... (Fale normalmente)';
-         try { recognition.start(); } catch(e) {} // Ignora erro se já estiver rodando
+         try { recognition.start(); } catch(e) {} 
        }
     };
 
