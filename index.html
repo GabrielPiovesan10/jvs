@@ -109,7 +109,7 @@
 <body>
 
 <div class="container-topo">
-  <div class="visualizer" id="jarvisVis" title="Clique para ativar/desativar"></div>
+  <div class="visualizer" id="jarvisVis" title="Toque para ativar/desativar"></div>
   <div id="status">Toque na esfera para iniciar o Jarvis</div>
 </div>
 
@@ -163,7 +163,6 @@
     chatBox.scrollTop = chatBox.scrollHeight;
   }
 
-  // Configuração do Reconhecimento de Voz
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (SpeechRecognition) {
     recognition = new SpeechRecognition();
@@ -193,11 +192,8 @@
         } catch(e) {}
       }
     };
-  } else {
-    mostrarErro("Compatibilidade", "Seu navegador não suporta reconhecimento de voz.");
   }
 
-  // Botão principal de ativação/desativação
   vis.addEventListener('click', () => {
     const synth = window.speechSynthesis;
     if (synth) {
@@ -210,9 +206,7 @@
       vis.classList.add('active');
       statusText.innerText = 'Ouvindo... Pode falar.';
       if (recognition) {
-        try {
-          recognition.start();
-        } catch(e) {}
+        try { recognition.start(); } catch(e) {}
       }
     } else {
       vis.classList.remove('active');
@@ -272,7 +266,7 @@
       vozesDisponiveis = synth.getVoices();
     }
 
-    // Procura prioritariamente pela Voz 1 / Siri do iOS ou outras opções de alta qualidade
+    // Pega prioritariamente a Voz 1 / Siri do iOS ou alta qualidade do Google
     let vozHumana = vozesDisponiveis.find(v => 
       v.lang.includes('pt') && (
         v.name.includes('Voz 1') || 
