@@ -122,7 +122,8 @@
   
   let isAtivo = false;
   let historico = []; 
-  let sharedAudio = null; // Player global desbloqueado pelo toque do usuário
+  let sharedAudio = null;
+  let reconhecendo = false; // Trava de segurança para o microfone
 
   function mostrarErro(contexto, erroMensagem) {
     console.error(contexto, erroMensagem);
@@ -148,34 +149,55 @@
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   const recognition = new SpeechRecognition();
   recognition.lang = 'pt-BR';
-  recognition.continuous = true; 
+  recognition.continuous = false; // Desativado contínuo para evitar conflitos no mobile
   recognition.interimResults = false;
 
-  recognition.onerror = (event) => {
-    mostrarErro("Erro no Microfone", event.error);
+  recognition.onstart = () => {
+    reconhecendo = true;
   };
 
-  // DESBLOQUEIO CRUCIAL NO CELULAR: Cria e ativa o player de áudio no exato toque
+  recognition.onend = () => {
+    reconhecendo = false;
+    // Se o Jarvis ainda estiver ativo e não estiver falando, reinicia a escuta com segurança
+    if (isAtivo && statusText.innerText.includes('Ouvindo')) {
+      setTimeout(() => {
+        if (isAtivo && !reconhecendo) {
+          try { recognition.start(); } catch(e) {}
+        }
+      }, 300);
+    }
+  };
+
+  recognition.onerror = (event) => {
+    reconhecendo = false;
+    if (event.error !== 'no-speech' && event.error !== 'aborted') {
+      mostrarErro("Erro no Microfone", event.error);
+    }
+  };
+
+  // Ativação por toque com destrave de áudio e microfone seguros
   vis.addEventListener('click', () => {
     if (!sharedAudio) {
       sharedAudio = new Audio();
     }
-    // Toca um áudio vazio para registrar a permissão de hardware do navegador móvel
     sharedAudio.play().catch(() => {});
 
     isAtivo = !isAtivo;
     if (isAtivo) {
       vis.classList.add('active');
       statusText.innerText = 'Ouvindo... (Fale normalmente)';
-      try {
-        recognition.start();
-      } catch(e) {
-        mostrarErro("Erro ao iniciar microfone", e.message);
+      if (!reconhecendo) {
+        try {
+          recognition.start();
+        } catch(e) {
+          mostrarErro("Erro ao iniciar microfone", e.message);
+        }
       }
     } else {
       vis.classList.remove('active');
       statusText.innerText = 'Em repouso. Toque para acordar.';
-      recognition.stop();
+      reconhecendo = false;
+      try { recognition.stop(); } catch(e) {}
     }
   });
 
@@ -184,7 +206,7 @@
     if (transcricao) {
       adicionarMensagem('Você', transcricao);
       statusText.innerText = 'Pensando...';
-      recognition.stop(); 
+      try { recognition.stop(); } catch(e) {} 
       await enviarParaAPI(transcricao);
     }
   };
@@ -251,7 +273,6 @@
     }
   }
 
-  // REPRODUÇÃO USANDO O PLAYER JÁ DESBLOQUEADO NO CLIQUE
   function falar(texto) {
     statusText.innerText = 'Jarvis falando...';
     
@@ -265,7 +286,7 @@
     sharedAudio.src = audioUrl;
     
     sharedAudio.play().then(() => {
-      console.log("Áudio reproduzido com sucesso no celular!");
+      console.log("Áudio reproduzido com sucesso!");
     }).catch(err => {
       mostrarErro('Erro ao reproduzir áudio', err.message);
       falarFallbackNativo(texto);
@@ -274,7 +295,9 @@
     sharedAudio.onended = () => {
        if (isAtivo) {
          statusText.innerText = 'Ouvindo... (Fale normalmente)';
-         try { recognition.start(); } catch(e) {} 
+         if (!reconhecendo) {
+           try { recognition.start(); } catch(e) {} 
+         }
        }
     };
   }
@@ -288,7 +311,9 @@
     utterance.onend = () => {
       if (isAtivo) {
         statusText.innerText = 'Ouvindo... (Fale normalmente)';
-        try { recognition.start(); } catch(e) {}
+        if (!reconhecendo) {
+          try { recognition.start(); } catch(e) {}
+        }
       }
     };
     synth.speak(utterance);
