@@ -122,18 +122,6 @@
   
   let isAtivo = false;
   let historico = []; 
-  let vozesDisponiveis = [];
-
-  // Carrega as vozes do sistema móvel
-  function carregarVozes() {
-    if ('speechSynthesis' in window) {
-      vozesDisponiveis = window.speechSynthesis.getVoices();
-    }
-  }
-  carregarVozes();
-  if (window.speechSynthesis && speechSynthesis.onvoiceschanged !== undefined) {
-    speechSynthesis.onvoiceschanged = carregarVozes;
-  }
 
   function mostrarErro(contexto, erroMensagem) {
     console.error(contexto, erroMensagem);
@@ -166,13 +154,11 @@
     mostrarErro("Erro no Microfone", event.error);
   };
 
-  // Desbloqueio e ativação por toque no mobile
+  // Ativação e desbloqueio de áudio do celular por toque
   vis.addEventListener('click', () => {
-    const synth = window.speechSynthesis;
-    if (synth) {
-      const dummy = new SpeechSynthesisUtterance('');
-      synth.speak(dummy);
-    }
+    // Força o desbloqueio tocando um áudio vazio na inicialização
+    const dummyAudio = new Audio();
+    dummyAudio.play().catch(() => {});
 
     isAtivo = !isAtivo;
     if (isAtivo) {
@@ -262,61 +248,34 @@
     }
   }
 
-  // CAÇADOR DE VOZ HUMANA/NEURAL NO CELULAR
+  // NOVA FUNÇÃO DE VOZ: Usa voz profissional em nuvem (sem robô, sem chave de API)
   function falar(texto) {
     statusText.innerText = 'Jarvis falando...';
     
-    const synth = window.speechSynthesis;
-    if (synth.speaking) {
-      synth.cancel();
-    }
+    // URL da API pública de conversão de texto em áudio natural (Voz masculina "Ricardo")
+    const encodedText = encodeURIComponent(texto);
+    const audioUrl = `https://api.streamelements.com/kappa/v2/speech?voice=Ricardo&text=${encodedText}`;
+    
+    const audio = new Audio(audioUrl);
+    window.currentAudio = audio; // Evita que o celular apague o áudio da memória
 
-    const utterance = new SpeechSynthesisUtterance(texto);
-    window.currentUtterance = utterance;
+    audio.play().then(() => {
+      console.log("Reproduzindo voz humana via nuvem.");
+    }).catch(err => {
+      mostrarErro("Erro ao reproduzir áudio", err.message);
+    });
 
-    // Atualiza a lista caso tenha demorado para carregar
-    if (vozesDisponiveis.length === 0) {
-      vozesDisponiveis = synth.getVoices();
-    }
-
-    // Procura por termos que indicam voz de alta qualidade (Neural, Natural, Google, Wavenet, Enhanced)
-    let vozHumana = vozesDisponiveis.find(voz => 
-      voz.lang.startsWith('pt') && (
-        voz.name.includes('Neural') || 
-        voz.name.includes('Natural') || 
-        voz.name.includes('Wavenet') || 
-        voz.name.includes('Google') || 
-        voz.name.includes('Enhanced') ||
-        voz.name.includes('Premium')
-      )
-    );
-
-    // Se não achar nenhuma marcada como avançada, pega a primeira em português disponível
-    if (!vozHumana) {
-      vozHumana = vozesDisponiveis.find(voz => voz.lang.startsWith('pt'));
-    }
-
-    if (vozHumana) {
-      utterance.voice = vozHumana;
-      console.log("Voz humana ativada:", vozHumana.name);
-    } else {
-      utterance.lang = 'pt-BR';
-    }
-
-    // Ajustes finos para suavizar o tom no celular
-    utterance.rate = 1.0; 
-    utterance.pitch = 1.0;
-
-    utterance.onend = () => {
+    // Quando o Jarvis terminar de falar, volta a ouvir automaticamente
+    audio.onended = () => {
        if (isAtivo) {
          statusText.innerText = 'Ouvindo... (Fale normalmente)';
          try { recognition.start(); } catch(e) {} 
        }
     };
 
-    setTimeout(() => {
-      synth.speak(utterance);
-    }, 100);
+    audio.onerror = (e) => {
+      mostrarErro('Erro no StreamElements TTS', 'Falha ao carregar o áudio da nuvem.');
+    };
   }
 </script>
 
