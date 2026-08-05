@@ -39,6 +39,13 @@
   .visualizer.active {
     background: radial-gradient(circle, #00d2ff 0%, #3a7bd5 70%); 
     box-shadow: 0 0 30px #00d2ff;
+    animation: pulsar 1.5s infinite;
+  }
+
+  @keyframes pulsar {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+    100% { transform: scale(1); }
   }
 
   #status {
@@ -102,12 +109,12 @@
 <body>
 
 <div class="container-topo">
-  <div class="visualizer" id="jarvisVis" title="Toque para ativar/desativar"></div>
-  <div id="status">Toque na esfera para iniciar</div>
+  <div class="visualizer" id="jarvisVis" title="Toque para falar"></div>
+  <div id="status">Toque na esfera para falar</div>
 </div>
 
 <div id="chat-box">
-  <div class="mensagem jarvis">Olá, Gabriel! Toque na esfera acima para conversar comigo.</div>
+  <div class="mensagem jarvis">Olá, Gabriel! Toque na esfera para falar comigo.</div>
 </div>
 
 <div id="painel-erros"><strong>LOG DE ERROS:</strong><br></div>
@@ -120,10 +127,9 @@
   const painelErros = document.getElementById('painel-erros');
   const chatBox = document.getElementById('chat-box');
   
-  let isAtivo = false;
   let historico = []; 
   let sharedAudio = null;
-  let reconhecendo = false; // Trava de segurança para o microfone
+  let ouvindo = false;
 
   function mostrarErro(contexto, erroMensagem) {
     console.error(contexto, erroMensagem);
@@ -149,94 +155,57 @@
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   const recognition = new SpeechRecognition();
   recognition.lang = 'pt-BR';
-  recognition.continuous = false; // Desativado contínuo para evitar conflitos no mobile
+  recognition.continuous = false; 
   recognition.interimResults = false;
 
-  recognition.onstart = () => {
-    reconhecendo = true;
-  };
-
-  recognition.onend = () => {
-    reconhecendo = false;
-    // Se o Jarvis ainda estiver ativo e não estiver falando, reinicia a escuta com segurança
-    if (isAtivo && statusText.innerText.includes('Ouvindo')) {
-      setTimeout(() => {
-        if (isAtivo && !reconhecendo) {
-          try { recognition.start(); } catch(e) {}
-        }
-      }, 300);
-    }
-  };
-
-  recognition.onerror = (event) => {
-    reconhecendo = false;
-    if (event.error !== 'no-speech' && event.error !== 'aborted') {
-      mostrarErro("Erro no Microfone", event.error);
-    }
-  };
-
-  // Ativação por toque com destrave de áudio e microfone seguros
+  // Ao tocar na esfera, inicia a escuta de forma 100% segura para mobile
   vis.addEventListener('click', () => {
+    if (ouvindo) return;
+
     if (!sharedAudio) {
       sharedAudio = new Audio();
     }
     sharedAudio.play().catch(() => {});
 
-    isAtivo = !isAtivo;
-    if (isAtivo) {
+    try {
+      ouvindo = true;
       vis.classList.add('active');
-      statusText.innerText = 'Ouvindo... (Fale normalmente)';
-      if (!reconhecendo) {
-        try {
-          recognition.start();
-        } catch(e) {
-          mostrarErro("Erro ao iniciar microfone", e.message);
-        }
-      }
-    } else {
+      statusText.innerText = 'Ouvindo... Pode falar.';
+      recognition.start();
+    } catch(e) {
+      ouvindo = false;
       vis.classList.remove('active');
-      statusText.innerText = 'Em repouso. Toque para acordar.';
-      reconhecendo = false;
-      try { recognition.stop(); } catch(e) {}
+      mostrarErro("Erro ao iniciar microfone", e.message);
     }
   });
 
   recognition.onresult = async (event) => {
-    const transcricao = event.results[event.results.length - 1][0].transcript.trim();
+    const transcricao = event.results[0][0].transcript.trim();
     if (transcricao) {
+      ouvindo = false;
+      vis.classList.remove('active');
       adicionarMensagem('Você', transcricao);
       statusText.innerText = 'Pensando...';
-      try { recognition.stop(); } catch(e) {} 
       await enviarParaAPI(transcricao);
     }
   };
 
-  navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-  .then(stream => {
-    const audioContext = new AudioContext();
-    const analyser = audioContext.createAnalyser();
-    const microphone = audioContext.createMediaStreamSource(stream);
-    microphone.connect(analyser);
-    analyser.fftSize = 256;
-    const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-    function animate() {
-      requestAnimationFrame(animate);
-      if (isAtivo) {
-        analyser.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-        const average = sum / dataArray.length;
-        const scale = 1 + (average / 150);
-        vis.style.transform = `scale(${scale})`;
-      } else {
-        vis.style.transform = `scale(1)`;
-      }
+  recognition.onerror = (event) => {
+    ouvindo = false;
+    vis.classList.remove('active');
+    statusText.innerText = 'Toque na esfera para falar';
+    if (event.error !== 'no-speech' && event.error !== 'aborted') {
+      mostrarErro("Erro no Microfone", event.error);
     }
-    animate();
-  }).catch(err => {
-    mostrarErro('Permissão de Áudio Negada', err.message);
-  });
+  };
+
+  recognition.onend = () => {
+    if (ouvindo) {
+      ouvindo = false;
+      vis.classList.remove('active');
+      statusText.innerText = 'Toque na esfera para falar';
+    }
+  };
 
   async function enviarParaAPI(mensagem) {
     historico.push({ role: "user", parts: [{ text: mensagem }] });
@@ -293,12 +262,7 @@
     });
 
     sharedAudio.onended = () => {
-       if (isAtivo) {
-         statusText.innerText = 'Ouvindo... (Fale normalmente)';
-         if (!reconhecendo) {
-           try { recognition.start(); } catch(e) {} 
-         }
-       }
+       statusText.innerText = 'Toque na esfera para falar';
     };
   }
 
@@ -309,12 +273,7 @@
     utterance.lang = 'pt-BR';
     utterance.rate = 1.05;
     utterance.onend = () => {
-      if (isAtivo) {
-        statusText.innerText = 'Ouvindo... (Fale normalmente)';
-        if (!reconhecendo) {
-          try { recognition.start(); } catch(e) {}
-        }
-      }
+      statusText.innerText = 'Toque na esfera para falar';
     };
     synth.speak(utterance);
   }
