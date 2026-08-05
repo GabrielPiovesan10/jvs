@@ -102,7 +102,7 @@
 <body>
 
 <div class="container-topo">
-  <div class="visualizer" id="jarvisVis" title="Clique para ativar/desativar"></div>
+  <div class="visualizer" id="jarvisVis" title="Toque para ativar/desativar"></div>
   <div id="status">Toque na esfera para iniciar</div>
 </div>
 
@@ -122,6 +122,18 @@
   
   let isAtivo = false;
   let historico = []; 
+  let vozesDisponiveis = [];
+
+  // Carrega as vozes do sistema móvel
+  function carregarVozes() {
+    if ('speechSynthesis' in window) {
+      vozesDisponiveis = window.speechSynthesis.getVoices();
+    }
+  }
+  carregarVozes();
+  if (window.speechSynthesis && speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = carregarVozes;
+  }
 
   function mostrarErro(contexto, erroMensagem) {
     console.error(contexto, erroMensagem);
@@ -154,9 +166,8 @@
     mostrarErro("Erro no Microfone", event.error);
   };
 
-  // TRUQUE PARA MOBILE: Desbloqueia o áudio do celular no exato clique de ativação
+  // Desbloqueio e ativação por toque no mobile
   vis.addEventListener('click', () => {
-    // Desbloqueio forçado do SpeechSynthesis para celulares
     const synth = window.speechSynthesis;
     if (synth) {
       const dummy = new SpeechSynthesisUtterance('');
@@ -251,6 +262,7 @@
     }
   }
 
+  // CAÇADOR DE VOZ HUMANA/NEURAL NO CELULAR
   function falar(texto) {
     statusText.innerText = 'Jarvis falando...';
     
@@ -260,11 +272,41 @@
     }
 
     const utterance = new SpeechSynthesisUtterance(texto);
-    window.currentUtterance = utterance; // Evita que o celular delete o áudio da memória
+    window.currentUtterance = utterance;
 
-    utterance.lang = 'pt-BR'; 
-    utterance.rate = 1.05; 
-    
+    // Atualiza a lista caso tenha demorado para carregar
+    if (vozesDisponiveis.length === 0) {
+      vozesDisponiveis = synth.getVoices();
+    }
+
+    // Procura por termos que indicam voz de alta qualidade (Neural, Natural, Google, Wavenet, Enhanced)
+    let vozHumana = vozesDisponiveis.find(voz => 
+      voz.lang.startsWith('pt') && (
+        voz.name.includes('Neural') || 
+        voz.name.includes('Natural') || 
+        voz.name.includes('Wavenet') || 
+        voz.name.includes('Google') || 
+        voz.name.includes('Enhanced') ||
+        voz.name.includes('Premium')
+      )
+    );
+
+    // Se não achar nenhuma marcada como avançada, pega a primeira em português disponível
+    if (!vozHumana) {
+      vozHumana = vozesDisponiveis.find(voz => voz.lang.startsWith('pt'));
+    }
+
+    if (vozHumana) {
+      utterance.voice = vozHumana;
+      console.log("Voz humana ativada:", vozHumana.name);
+    } else {
+      utterance.lang = 'pt-BR';
+    }
+
+    // Ajustes finos para suavizar o tom no celular
+    utterance.rate = 1.0; 
+    utterance.pitch = 1.0;
+
     utterance.onend = () => {
        if (isAtivo) {
          statusText.innerText = 'Ouvindo... (Fale normalmente)';
