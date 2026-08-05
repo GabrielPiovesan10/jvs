@@ -17,11 +17,10 @@
     font-family: Arial, sans-serif;
   }
   
-  /* Bola Animada */
   .visualizer {
     width: 180px;
     height: 180px;
-    background: radial-gradient(circle, #ff4b4b 0%, #b30000 70%);
+    background: radial-gradient(circle, #ff4b4b 0%, #b30000 70%); 
     border-radius: 50%;
     box-shadow: 0 0 60px #ff4b4b;
     transition: all 0.3s ease;
@@ -29,7 +28,7 @@
   }
   
   .visualizer.active {
-    background: radial-gradient(circle, #00d2ff 0%, #3a7bd5 70%);
+    background: radial-gradient(circle, #00d2ff 0%, #3a7bd5 70%); 
     box-shadow: 0 0 60px #00d2ff;
   }
 
@@ -39,7 +38,6 @@
     color: #aaa;
   }
 
-  /* CAIXA DE ERROS NA TELA */
   #painel-erros {
     margin-top: 20px;
     width: 80%;
@@ -51,7 +49,7 @@
     color: #ff9999;
     font-family: monospace;
     font-size: 14px;
-    display: none; /* Só aparece se der erro */
+    display: none;
     max-height: 150px;
     overflow-y: auto;
   }
@@ -62,12 +60,9 @@
 <div class="visualizer" id="jarvisVis" title="Clique para ativar/desativar"></div>
 <div id="status">Clique na esfera para iniciar o Jarvis</div>
 
-<!-- Div onde os erros vão aparecer -->
 <div id="painel-erros"><strong>LOG DE ERROS:</strong><br></div>
 
 <script>
-  // 1. CONFIGURAÇÕES
-  const API_KEY = 'COLOQUE_SUA_CHAVE_API_AQUI'; 
   const PROMPT_SISTEMA = "Você é o Jarvis, assistente virtual da GP Tech Digital. Aja como um parceiro humano de trabalho. Seja amigável, direto e tenha conversas fluidas. Mantenha suas respostas curtas, pois elas serão lidas em voz alta.";
   
   const vis = document.getElementById('jarvisVis');
@@ -78,16 +73,13 @@
   let historico = []; 
   let vozesDisponiveis = [];
 
-  // Função para mostrar os erros visualmente na tela
   function mostrarErro(contexto, erroMensagem) {
     console.error(contexto, erroMensagem);
     painelErros.style.display = 'block';
     painelErros.innerHTML += `> <b>${contexto}:</b> ${erroMensagem}<br><br>`;
-    // Rola para o final da caixa de erro
     painelErros.scrollTop = painelErros.scrollHeight;
   }
 
-  // Carrega as vozes do navegador
   function carregarVozes() {
     vozesDisponiveis = window.speechSynthesis.getVoices();
   }
@@ -95,7 +87,6 @@
     speechSynthesis.onvoiceschanged = carregarVozes;
   }
 
-  // 2. RECONHECIMENTO DE VOZ
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   const recognition = new SpeechRecognition();
   recognition.lang = 'pt-BR';
@@ -132,7 +123,6 @@
     }
   };
 
-  // 3. ANIMAÇÃO DA BOLA
   navigator.mediaDevices.getUserMedia({ audio: true, video: false })
   .then(stream => {
     const audioContext = new AudioContext();
@@ -160,11 +150,12 @@
     mostrarErro('Permissão de Áudio Negada', err.message);
   });
 
-  // 4. CONEXÃO COM API
+  // A CONEXÃO AGORA BATE NA SUA VERCEL
   async function enviarParaAPI(mensagem) {
     historico.push({ role: "user", parts: [{ text: mensagem }] });
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${API_KEY}`;
+    // Endpoint chamando a sua própria rota da Vercel
+    const url = `/api/jarvis`;
     
     try {
       const response = await fetch(url, {
@@ -178,23 +169,21 @@
       
       const data = await response.json();
       
-      // Essa trava pega o erro exato que o Google devolver (ex: modelo não existe, chave inválida, sem créditos)
       if (!response.ok) {
-        const msgErro = data.error ? data.error.message : `HTTP Status ${response.status}`;
-        throw new Error(msgErro);
+        throw new Error(data.error || `HTTP Status ${response.status}`);
       }
 
       const respostaJarvis = data.candidates[0].content.parts[0].text;
-      historico.push({ role: "model", parts: [{ text: respostaJarvis }] });
       
+      historico.push({ role: "model", parts: [{ text: respostaJarvis }] });
       falar(respostaJarvis);
+      
     } catch (error) {
-      mostrarErro('Erro na API do Google', error.message);
-      falar("Desculpe, ocorreu um erro de conexão. Verifique o log na tela.");
+      mostrarErro('Erro no Backend/Vercel', error.message);
+      falar("Desculpe, ocorreu um erro de conexão com o servidor da Vercel.");
     }
   }
 
-  // 5. RESPOSTA EM VOZ COM EDGE TTS
   function falar(texto) {
     statusText.innerText = 'Jarvis falando...';
     const synth = window.speechSynthesis;
