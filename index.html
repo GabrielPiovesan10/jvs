@@ -122,6 +122,7 @@
   
   let isAtivo = false;
   let historico = []; 
+  let sharedAudio = null; // Player global desbloqueado pelo toque do usuário
 
   function mostrarErro(contexto, erroMensagem) {
     console.error(contexto, erroMensagem);
@@ -154,10 +155,13 @@
     mostrarErro("Erro no Microfone", event.error);
   };
 
-  // Desbloqueio de áudio no toque do celular
+  // DESBLOQUEIO CRUCIAL NO CELULAR: Cria e ativa o player de áudio no exato toque
   vis.addEventListener('click', () => {
-    const dummyAudio = new Audio();
-    dummyAudio.play().catch(() => {});
+    if (!sharedAudio) {
+      sharedAudio = new Audio();
+    }
+    // Toca um áudio vazio para registrar a permissão de hardware do navegador móvel
+    sharedAudio.play().catch(() => {});
 
     isAtivo = !isAtivo;
     if (isAtivo) {
@@ -247,24 +251,27 @@
     }
   }
 
-  // MOTOR DE ÁUDIO VIA GOOGLE TTS (Confiável, limpo e direto no mobile)
+  // REPRODUÇÃO USANDO O PLAYER JÁ DESBLOQUEADO NO CLIQUE
   function falar(texto) {
     statusText.innerText = 'Jarvis falando...';
     
-    // Limita o texto para garantir estabilidade no player mobile
     const textoLimpo = texto.length > 200 ? texto.substring(0, 200) : texto;
     const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(textoLimpo)}&tl=pt-BR&client=tw-ob`;
     
-    const audio = new Audio(audioUrl);
-    window.currentAudio = audio;
+    if (!sharedAudio) {
+      sharedAudio = new Audio();
+    }
 
-    audio.play().catch(err => {
+    sharedAudio.src = audioUrl;
+    
+    sharedAudio.play().then(() => {
+      console.log("Áudio reproduzido com sucesso no celular!");
+    }).catch(err => {
       mostrarErro('Erro ao reproduzir áudio', err.message);
-      // Fallback automático para a voz nativa caso o link sofra bloqueio
       falarFallbackNativo(texto);
     });
 
-    audio.onended = () => {
+    sharedAudio.onended = () => {
        if (isAtivo) {
          statusText.innerText = 'Ouvindo... (Fale normalmente)';
          try { recognition.start(); } catch(e) {} 
@@ -272,7 +279,6 @@
     };
   }
 
-  // Fallback de segurança se o celular barrar o link externo
   function falarFallbackNativo(texto) {
     const synth = window.speechSynthesis;
     if (synth.speaking) synth.cancel();
