@@ -128,8 +128,18 @@
   const chatBox = document.getElementById('chat-box');
   
   let historico = []; 
-  let sharedAudio = null;
   let ouvindo = false;
+  let vozesDisponiveis = [];
+
+  function carregarVozes() {
+    if ('speechSynthesis' in window) {
+      vozesDisponiveis = window.speechSynthesis.getVoices();
+    }
+  }
+  carregarVozes();
+  if (window.speechSynthesis && speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = carregarVozes;
+  }
 
   function mostrarErro(contexto, erroMensagem) {
     console.error(contexto, erroMensagem);
@@ -158,14 +168,15 @@
   recognition.continuous = false; 
   recognition.interimResults = false;
 
-  // Ao tocar na esfera, inicia a escuta de forma 100% segura para mobile
   vis.addEventListener('click', () => {
     if (ouvindo) return;
 
-    if (!sharedAudio) {
-      sharedAudio = new Audio();
+    // Destrava o motor de áudio nativo no toque do usuário
+    const synth = window.speechSynthesis;
+    if (synth) {
+      const dummy = new SpeechSynthesisUtterance('');
+      synth.speak(dummy);
     }
-    sharedAudio.play().catch(() => {});
 
     try {
       ouvindo = true;
@@ -232,49 +243,54 @@
       
       historico.push({ role: "model", parts: [{ text: respostaJarvis }] });
       adicionarMensagem('Jarvis', respostaJarvis);
-      falar(respostaJarvis);
+      falarNativo(respostaJarvis);
       
     } catch (error) {
       mostrarErro('Erro no Backend/Vercel', error.message);
       const msgErroVoz = "Desculpe, ocorreu um erro de conexão.";
       adicionarMensagem('Jarvis', msgErroVoz);
-      falar(msgErroVoz);
+      falarNativo(msgErroVoz);
     }
   }
 
-  function falar(texto) {
+  // SINTETIZADOR NATIVO OTIMIZADO PARA CELULAR
+  function falarNativo(texto) {
     statusText.innerText = 'Jarvis falando...';
     
-    const textoLimpo = texto.length > 200 ? texto.substring(0, 200) : texto;
-    const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(textoLimpo)}&tl=pt-BR&client=tw-ob`;
-    
-    if (!sharedAudio) {
-      sharedAudio = new Audio();
-    }
-
-    sharedAudio.src = audioUrl;
-    
-    sharedAudio.play().then(() => {
-      console.log("Áudio reproduzido com sucesso!");
-    }).catch(err => {
-      mostrarErro('Erro ao reproduzir áudio', err.message);
-      falarFallbackNativo(texto);
-    });
-
-    sharedAudio.onended = () => {
-       statusText.innerText = 'Toque na esfera para falar';
-    };
-  }
-
-  function falarFallbackNativo(texto) {
     const synth = window.speechSynthesis;
     if (synth.speaking) synth.cancel();
+
     const utterance = new SpeechSynthesisUtterance(texto);
-    utterance.lang = 'pt-BR';
-    utterance.rate = 1.05;
+    window.currentUtterance = utterance;
+
+    if (vozesDisponiveis.length === 0) {
+      vozesDisponiveis = synth.getVoices();
+    }
+
+    // Tenta encontrar uma voz mais fluida no celular (Google PT ou vozes de alta qualidade)
+    let vozBoa = vozesDisponiveis.find(v => v.lang.startsWith('pt') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Neural')));
+    if (!vozBoa) {
+      vozBoa = vozesDisponiveis.find(v => v.lang.startsWith('pt'));
+    }
+
+    if (vozBoa) {
+      utterance.voice = vozBoa;
+    } else {
+      utterance.lang = 'pt-BR';
+    }
+
+    utterance.rate = 1.0; 
+    utterance.pitch = 1.0;
+
     utterance.onend = () => {
       statusText.innerText = 'Toque na esfera para falar';
     };
+
+    utterance.onerror = (e) => {
+      mostrarErro('Erro na Fala', e.error);
+      statusText.innerText = 'Toque na esfera para falar';
+    };
+
     synth.speak(utterance);
   }
 </script>
