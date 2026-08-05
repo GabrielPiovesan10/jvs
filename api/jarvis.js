@@ -9,7 +9,6 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Chave da API não encontrada nas variáveis da Vercel.' });
   }
 
-  // Endpoint configurado para a versão 3.1 Flash Lite
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${API_KEY}`;
 
   try {
