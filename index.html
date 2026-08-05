@@ -8,7 +8,7 @@
   body {
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: space-between;
     align-items: center;
     height: 100vh;
     background-color: #121212;
@@ -16,49 +16,99 @@
     color: #fff;
     font-family: Arial, sans-serif;
   }
+
+  .container-topo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 30px;
+  }
   
   .visualizer {
-    width: 180px;
-    height: 180px;
+    width: 140px;
+    height: 140px;
     background: radial-gradient(circle, #ff4b4b 0%, #b30000 70%); 
     border-radius: 50%;
-    box-shadow: 0 0 60px #ff4b4b;
+    box-shadow: 0 0 40px #ff4b4b;
     transition: all 0.3s ease;
     cursor: pointer;
   }
   
   .visualizer.active {
     background: radial-gradient(circle, #00d2ff 0%, #3a7bd5 70%); 
-    box-shadow: 0 0 60px #00d2ff;
+    box-shadow: 0 0 40px #00d2ff;
   }
 
   #status {
-    margin-top: 40px;
-    font-size: 18px;
+    margin-top: 15px;
+    font-size: 16px;
     color: #aaa;
   }
 
+  /* CAIXA DE HISTÓRICO DE CONVERSA NA TELA */
+  #chat-box {
+    width: 90%;
+    max-width: 600px;
+    height: 45vh;
+    background-color: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 10px;
+    padding: 15px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .mensagem {
+    padding: 10px 14px;
+    border-radius: 8px;
+    max-width: 80%;
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .mensagem.user {
+    background-color: #2b3a42;
+    color: #00d2ff;
+    align-self: flex-end;
+  }
+
+  .mensagem.jarvis {
+    background-color: #2a2a2a;
+    color: #fff;
+    align-self: flex-start;
+  }
+
   #painel-erros {
-    margin-top: 20px;
-    width: 80%;
+    width: 90%;
     max-width: 600px;
     background-color: #2a0000;
     border: 1px solid #ff4b4b;
     border-radius: 8px;
-    padding: 15px;
+    padding: 10px;
     color: #ff9999;
     font-family: monospace;
-    font-size: 14px;
+    font-size: 12px;
     display: none;
-    max-height: 150px;
+    max-height: 100px;
     overflow-y: auto;
+    margin-bottom: 10px;
   }
 </style>
 </head>
 <body>
 
-<div class="visualizer" id="jarvisVis" title="Clique para ativar/desativar"></div>
-<div id="status">Clique na esfera para iniciar o Jarvis</div>
+<div class="container-topo">
+  <div class="visualizer" id="jarvisVis" title="Clique para ativar/desativar"></div>
+  <div id="status">Clique na esfera para iniciar o Jarvis</div>
+</div>
+
+<!-- O que você e ele falam aparece aqui -->
+<div id="chat-box">
+  <div class="mensagem jarvis">Olá, Gabriel! Sou o Jarvis da GP Tech Digital. Clique na esfera acima para conversarmos.</div>
+</div>
 
 <div id="painel-erros"><strong>LOG DE ERROS:</strong><br></div>
 
@@ -68,10 +118,10 @@
   const vis = document.getElementById('jarvisVis');
   const statusText = document.getElementById('status');
   const painelErros = document.getElementById('painel-erros');
+  const chatBox = document.getElementById('chat-box');
   
   let isAtivo = false;
   let historico = []; 
-  let vozesDisponiveis = [];
 
   function mostrarErro(contexto, erroMensagem) {
     console.error(contexto, erroMensagem);
@@ -80,11 +130,18 @@
     painelErros.scrollTop = painelErros.scrollHeight;
   }
 
-  function carregarVozes() {
-    vozesDisponiveis = window.speechSynthesis.getVoices();
-  }
-  if (speechSynthesis.onvoiceschanged !== undefined) {
-    speechSynthesis.onvoiceschanged = carregarVozes;
+  function adicionarMensagem(remetente, texto) {
+    const div = document.createElement('div');
+    div.classList.add('mensagem');
+    if (remetente === 'Você') {
+      div.classList.add('user');
+      div.innerText = `Você: ${texto}`;
+    } else {
+      div.classList.add('jarvis');
+      div.innerText = `Jarvis: ${texto}`;
+    }
+    chatBox.appendChild(div);
+    chatBox.scrollTop = chatBox.scrollHeight; // Rola o chat para baixo
   }
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -117,6 +174,7 @@
   recognition.onresult = async (event) => {
     const transcricao = event.results[event.results.length - 1][0].transcript.trim();
     if (transcricao) {
+      adicionarMensagem('Você', transcricao);
       statusText.innerText = 'Pensando...';
       recognition.stop(); 
       await enviarParaAPI(transcricao);
@@ -174,47 +232,34 @@
       const respostaJarvis = data.candidates[0].content.parts[0].text;
       
       historico.push({ role: "model", parts: [{ text: respostaJarvis }] });
+      adicionarMensagem('Jarvis', respostaJarvis);
       falar(respostaJarvis);
       
     } catch (error) {
       mostrarErro('Erro no Backend/Vercel', error.message);
-      falar("Desculpe, ocorreu um erro de conexão com o servidor da Vercel.");
+      const msgErroVoz = "Desculpe, ocorreu um erro de conexão.";
+      adicionarMensagem('Jarvis', msgErroVoz);
+      falar(msgErroVoz);
     }
   }
 
+  // FUNÇÃO DE VOZ BLINDADA (Usa o padrão nativo pt-BR para garantir que o som sai)
   function falar(texto) {
     statusText.innerText = 'Jarvis falando...';
     
     const synth = window.speechSynthesis;
-    
     if (synth.speaking) {
       synth.cancel();
     }
 
     const utterance = new SpeechSynthesisUtterance(texto);
-    
-    // TRUQUE CRUCIAL: Impede que o navegador mate o áudio no meio do caminho
-    window.currentUtterance = utterance; 
+    window.currentUtterance = utterance; // Evita que o coletor de lixo delete o áudio
 
-    const voces = synth.getVoices();
-    
-    // Tenta achar a voz neural do Edge, senão pega qualquer uma em português
-    let vozPt = voces.find(voz => voz.name.includes('Online (Natural)') && voz.lang.includes('pt-BR'));
-    if (!vozPt) {
-      vozPt = voces.find(voz => voz.lang.startsWith('pt'));
-    }
-
-    if (vozPt) {
-      utterance.voice = vozPt;
-      console.log("Usando voz:", vozPt.name);
-    } else {
-      utterance.lang = 'pt-BR';
-    }
-
+    utterance.lang = 'pt-BR'; // Força o idioma nativo do sistema do PC
     utterance.rate = 1.05; 
     
     utterance.onstart = () => {
-      console.log("Áudio iniciado com sucesso no navegador.");
+      console.log("Som emitido com sucesso.");
     };
 
     utterance.onerror = (e) => {
@@ -228,10 +273,9 @@
        }
     };
 
-    // Pequeno atraso para garantir que o motor de áudio respirou
     setTimeout(() => {
       synth.speak(utterance);
-    }, 200);
+    }, 150);
   }
 </script>
 
