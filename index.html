@@ -150,11 +150,9 @@
     mostrarErro('Permissão de Áudio Negada', err.message);
   });
 
-  // A CONEXÃO AGORA BATE NA SUA VERCEL
   async function enviarParaAPI(mensagem) {
     historico.push({ role: "user", parts: [{ text: mensagem }] });
 
-    // Endpoint chamando a sua própria rota da Vercel
     const url = `/api/jarvis`;
     
     try {
@@ -186,8 +184,15 @@
 
   function falar(texto) {
     statusText.innerText = 'Jarvis falando...';
+    
     const synth = window.speechSynthesis;
+    synth.cancel(); 
+    
     const utterance = new SpeechSynthesisUtterance(texto);
+    
+    if (vozesDisponiveis.length === 0) {
+      vozesDisponiveis = synth.getVoices();
+    }
     
     const vozEdgeNeural = vozesDisponiveis.find(voz => 
       voz.name.includes('Online (Natural)') && voz.lang.includes('pt-BR')
@@ -202,7 +207,7 @@
     utterance.rate = 1.05; 
     
     utterance.onerror = (e) => {
-      mostrarErro('Erro na Geração de Voz (TTS)', e.error);
+      mostrarErro('Erro no Áudio (TTS)', e.error);
     };
 
     utterance.onend = () => {
@@ -212,6 +217,7 @@
        }
     };
 
+    window.vozAtual = utterance;
     synth.speak(utterance);
   }
 </script>
