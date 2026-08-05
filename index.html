@@ -193,14 +193,20 @@
 
     const utterance = new SpeechSynthesisUtterance(texto);
     
-    const voces = synth.getVoices();
-    const vozEdgeNeural = voces.find(voz => 
-      voz.name.includes('Online (Natural)') && voz.lang.includes('pt-BR')
-    );
+    // TRUQUE CRUCIAL: Impede que o navegador mate o áudio no meio do caminho
+    window.currentUtterance = utterance; 
 
-    if (vozEdgeNeural) {
-      utterance.voice = vozEdgeNeural;
-      console.log("Usando voz:", vozEdgeNeural.name);
+    const voces = synth.getVoices();
+    
+    // Tenta achar a voz neural do Edge, senão pega qualquer uma em português
+    let vozPt = voces.find(voz => voz.name.includes('Online (Natural)') && voz.lang.includes('pt-BR'));
+    if (!vozPt) {
+      vozPt = voces.find(voz => voz.lang.startsWith('pt'));
+    }
+
+    if (vozPt) {
+      utterance.voice = vozPt;
+      console.log("Usando voz:", vozPt.name);
     } else {
       utterance.lang = 'pt-BR';
     }
@@ -208,7 +214,7 @@
     utterance.rate = 1.05; 
     
     utterance.onstart = () => {
-      console.log("O navegador começou a emitir o som com sucesso.");
+      console.log("Áudio iniciado com sucesso no navegador.");
     };
 
     utterance.onerror = (e) => {
@@ -222,9 +228,10 @@
        }
     };
 
+    // Pequeno atraso para garantir que o motor de áudio respirou
     setTimeout(() => {
       synth.speak(utterance);
-    }, 100);
+    }, 200);
   }
 </script>
 
