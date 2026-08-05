@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jarvis - GP Tech Digital</title>
+<style>
+  body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #121212;
+    margin: 0;
+    color: #fff;
+    font-family: Arial, sans-serif;
+  }
+  
+  /* Bola Animada - Muda de cor dependendo do estado */
+  .visualizer {
+    width: 180px;
+    height: 180px;
+    background: radial-gradient(circle, #ff4b4b 0%, #b30000 70%); /* Vermelho = Dormindo */
+    border-radius: 50%;
+    box-shadow: 0 0 60px #ff4b4b;
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+  
+  .visualizer.active {
+    background: radial-gradient(circle, #00d2ff 0%, #3a7bd5 70%); /* Azul = Ouvindo */
+    box-shadow: 0 0 60px #00d2ff;
+  }
+
+  #status {
+    margin-top: 40px;
+    font-size: 18px;
+    color: #aaa;
+  }
+</style>
+</head>
+<body>
+
+<div class="visualizer" id="jarvisVis" title="Clique para ativar/desativar"></div>
+<div id="status">Clique na esfera para iniciar o Jarvis</div>
+
+<script>
+  // 1. CONFIGURAÇÕES
+  const API_KEY = 'COLOQUE_SUA_CHAVE_API_AQUI'; 
+  const PROMPT_SISTEMA = "Você é o Jarvis, assistente virtual da GP Tech Digital. Aja como um parceiro humano de trabalho. Seja amigável, direto e tenha conversas fluidas. Mantenha suas respostas curtas, pois elas serão lidas em voz alta.";
+  
+  const vis = document.getElementById('jarvisVis');
+  const statusText = document.getElementById('status');
+  
+  let isAtivo = false;
+  let historico = []; // Guarda o contexto da conversa
+
+  // 2. RECONHECIMENTO DE VOZ CONTÍNUO
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const recognition = new SpeechRecognition();
+  recognition.lang = 'pt-BR';
+  recognition.continuous = true; 
+  recognition.interimResults = false;
+
+  // Lógica de Ativação pelo Clique
+  vis.addEventListener('click', () => {
+    isAtivo = !isAtivo;
+    if (isAtivo) {
+      vis.classList.add('active');
+      statusText.innerText = 'Jarvis ouvindo... (Fale normalmente)';
+      recognition.start();
+    } else {
+      vis.classList.remove('active');
+      statusText.innerText = 'Jarvis em repouso. Clique para acordar.';
+      recognition.stop();
+    }
+  });
+
+  // Quando o usuário termina de falar uma frase
+  recognition.onresult = async (event) => {
+    const transcricao = event.results[event.results.length - 1][0].transcript.trim();
+    if (transcricao) {
+      console.log("Gabriel:", transcricao);
+      statusText.innerText = 'Pensando...';
+      
+      // Pausa a escuta para não captar a própria voz do Jarvis (evita eco/tokens extras)
+      recognition.stop(); 
+      
+      await enviarParaAPI(transcricao);
+    }
+  };
+
+  // 3. ANIMAÇÃO DO MICROFONE (Pulsar)
+  navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+  .then(stream => {
+    const audioContext = new AudioContext();
+    const analyser = audioContext.createAnalyser();
+    const microphone = audioContext.createMediaStreamSource(stream);
+    microphone.connect(analyser);
+    analyser.fftSize = 256;
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (isAtivo) {
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+        const average = sum / dataArray.length;
+        const scale = 1 + (average / 150);
+        vis.style.transform = `scale(${scale})`;
+      } else {
+        vis.style.transform = `scale(1)`;
+      }
+    }
+    animate();
+  }).catch(err => console.error('Erro de permissão no microfone:', err));
+
+  // 4. CONEXÃO COM API (Gemini 1.5 Flash com Contexto)
+  async function enviarParaAPI(mensagem) {
+    historico.push({ role: "user", parts: [{ text: mensagem }] });
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: PROMPT_SISTEMA }] },
+          contents: historico
+        })
+      });
+      
+      const data = await response.json();
+      const respostaJarvis = data.candidates[0].content.parts[0].text;
+      
+      // Salva a resposta do Jarvis no histórico para ele lembrar do papo
+      historico.push({ role: "model", parts: [{ text: respostaJarvis }] });
+      
+      falar(respostaJarvis);
+    } catch (error) {
+      console.error('Erro na API:', error);
+      falar("Desculpe, tive um problema de conexão.");
+    }
+  }
+
+  // 5. RESPOSTA EM VOZ (E reativação automática da escuta)
+  function falar(texto) {
+    statusText.innerText = 'Jarvis falando...';
+    const synth = window.speechSynthesis;
+    const utterance = new SpeechSynthesisUtterance(texto);
+    utterance.lang = 'pt-BR';
+    utterance.rate = 1.1; 
+    
+    // Quando o Jarvis terminar de falar, volta a ouvir automaticamente (se estiver ativo)
+    utterance.onend = () => {
+       if (isAtivo) {
+         statusText.innerText = 'Jarvis ouvindo... (Fale normalmente)';
+         try { recognition.start(); } catch(e) {} // Ignora erro se já estiver rodando
+       }
+    };
+
+    synth.speak(utterance);
+  }
+</script>
+
+</body>
+</html>
