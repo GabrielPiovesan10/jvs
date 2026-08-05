@@ -187,14 +187,12 @@
     
     const synth = window.speechSynthesis;
     
-    // Cancela qualquer áudio preso anterior
     if (synth.speaking) {
       synth.cancel();
     }
 
     const utterance = new SpeechSynthesisUtterance(texto);
     
-    // Atualiza a lista de vozes na hora para garantir que acha a Neural do Edge
     const voces = synth.getVoices();
     const vozEdgeNeural = voces.find(voz => 
       voz.name.includes('Online (Natural)') && voz.lang.includes('pt-BR')
@@ -224,13 +222,9 @@
        }
     };
 
-    // TRUQUE DE OURO: Pequeno delay para burlar a trava de async do navegador
     setTimeout(() => {
       synth.speak(utterance);
     }, 100);
-  }
-    window.vozAtual = utterance;
-    synth.speak(utterance);
   }
 </script>
 
