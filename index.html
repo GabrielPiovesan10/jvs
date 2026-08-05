@@ -154,9 +154,8 @@
     mostrarErro("Erro no Microfone", event.error);
   };
 
-  // Ativação e desbloqueio de áudio do celular por toque
+  // Desbloqueio de áudio no toque do celular
   vis.addEventListener('click', () => {
-    // Força o desbloqueio tocando um áudio vazio na inicialização
     const dummyAudio = new Audio();
     dummyAudio.play().catch(() => {});
 
@@ -248,34 +247,45 @@
     }
   }
 
-  // NOVA FUNÇÃO DE VOZ: Usa voz profissional em nuvem (sem robô, sem chave de API)
+  // MOTOR DE ÁUDIO VIA GOOGLE TTS (Confiável, limpo e direto no mobile)
   function falar(texto) {
     statusText.innerText = 'Jarvis falando...';
     
-    // URL da API pública de conversão de texto em áudio natural (Voz masculina "Ricardo")
-    const encodedText = encodeURIComponent(texto);
-    const audioUrl = `https://api.streamelements.com/kappa/v2/speech?voice=Ricardo&text=${encodedText}`;
+    // Limita o texto para garantir estabilidade no player mobile
+    const textoLimpo = texto.length > 200 ? texto.substring(0, 200) : texto;
+    const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(textoLimpo)}&tl=pt-BR&client=tw-ob`;
     
     const audio = new Audio(audioUrl);
-    window.currentAudio = audio; // Evita que o celular apague o áudio da memória
+    window.currentAudio = audio;
 
-    audio.play().then(() => {
-      console.log("Reproduzindo voz humana via nuvem.");
-    }).catch(err => {
-      mostrarErro("Erro ao reproduzir áudio", err.message);
+    audio.play().catch(err => {
+      mostrarErro('Erro ao reproduzir áudio', err.message);
+      // Fallback automático para a voz nativa caso o link sofra bloqueio
+      falarFallbackNativo(texto);
     });
 
-    // Quando o Jarvis terminar de falar, volta a ouvir automaticamente
     audio.onended = () => {
        if (isAtivo) {
          statusText.innerText = 'Ouvindo... (Fale normalmente)';
          try { recognition.start(); } catch(e) {} 
        }
     };
+  }
 
-    audio.onerror = (e) => {
-      mostrarErro('Erro no StreamElements TTS', 'Falha ao carregar o áudio da nuvem.');
+  // Fallback de segurança se o celular barrar o link externo
+  function falarFallbackNativo(texto) {
+    const synth = window.speechSynthesis;
+    if (synth.speaking) synth.cancel();
+    const utterance = new SpeechSynthesisUtterance(texto);
+    utterance.lang = 'pt-BR';
+    utterance.rate = 1.05;
+    utterance.onend = () => {
+      if (isAtivo) {
+        statusText.innerText = 'Ouvindo... (Fale normalmente)';
+        try { recognition.start(); } catch(e) {}
+      }
     };
+    synth.speak(utterance);
   }
 </script>
 
