@@ -11,7 +11,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    // URL oficial da documentação que você mandou
     const urlDaApi = 'https://easyvoice.ae/api/v1/audio/speech';
 
     const response = await fetch(urlDaApi, {
@@ -21,9 +20,9 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: "tts-1", // Padrão de endpoint compatível com OpenAI
-        input: text,    // A API pede "input" em vez de "text"
-        voice: "af_aoede" // Voz gratuita padrão liberada na sua chave
+        model: "tts-1", 
+        input: text,    
+        voice: "onyx" // Voz masculina padrão compatível com o endpoint
       })
     });
 
