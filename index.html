@@ -127,11 +127,11 @@
     <option value="ar_f1">Arabic Female 1 (ar_f1)</option>
     <option value="af_aoede">Voz Padrão (af_aoede)</option>
   </select>
-  <div id="status">Toque na esfera para gravar</div>
+  <div id="status">Toque na esfera para falar</div>
 </div>
 
 <div id="chat-box">
-  <div class="mensagem jarvis">Olá, Gabriel! Toque na esfera para gravar sua mensagem.</div>
+  <div class="mensagem jarvis">Olá, Gabriel! Toque na esfera para falar comigo.</div>
 </div>
 
 <div id="painel-erros"><strong>LOG DE ERROS:</strong><br></div>
@@ -146,9 +146,9 @@
   const seletorVoz = document.getElementById('seletor-voz');
   
   let historico = []; 
-  let mediaRecorder = null;
-  let audioChunks = [];
-  let gravando = false;
+  let recognition = null;
+  let isOuvindo = false;
+  let processando = false;
   const playerDeAudio = new Audio();
 
   function mostrarErro(contexto, erroMensagem) {
@@ -172,76 +172,76 @@
     chatBox.scrollTop = chatBox.scrollHeight;
   }
 
-  vis.addEventListener('click', async () => {
+  // Inicializa a instância única de reconhecimento de voz ao carregar a página
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+      isOuvindo = true;
+      vis.classList.add('active');
+      statusText.innerText = 'Ouvindo... Pode falar.';
+    };
+
+    recognition.onresult = async (event) => {
+      const transcricao = event.results[0][0].transcript.trim();
+      if (transcricao) {
+        processando = true;
+        adicionarMensagem('Você', transcricao);
+        statusText.innerText = 'Pensando...';
+        await enviarParaAPI(transcricao);
+      }
+    };
+
+    recognition.onerror = (event) => {
+      if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        mostrarErro("Erro no Microfone", event.error);
+      }
+      resetarInterface();
+    };
+
+    recognition.onend = () => {
+      if (!processando) {
+        resetarInterface();
+      }
+    };
+  }
+
+  vis.addEventListener('click', () => {
+    if (processando) return;
+
     // Desbloqueio obrigatório de áudio para mobile
     playerDeAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
     playerDeAudio.play().catch(e => {});
 
-    if (!gravando) {
-      // Iniciar Gravação
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
-
-        mediaRecorder.ondataavailable = event => {
-          if (event.data.size > 0) audioChunks.push(event.data);
-        };
-
-        mediaRecorder.onstop = async () => {
-          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-          // Para parar as tracks do mic e liberar o hardware pro próximo ciclo
-          stream.getTracks().forEach(track => track.stop());
-          
-          statusText.innerText = 'Processando áudio...';
-          await enviarAudioParaTranscricao(audioBlob);
-        };
-
-        mediaRecorder.start();
-        gravando = true;
-        vis.classList.add('active');
-        statusText.innerText = 'Gravando... Toque de novo para enviar.';
-      } catch (err) {
-        mostrarErro("Erro no Microfone", err.message);
-        statusText.innerText = 'Erro ao acessar o microfone';
+    if (!isOuvindo) {
+      if (recognition) {
+        try {
+          recognition.start();
+        } catch (e) {
+          // Se já estivesse iniciada, ignoramos e paramos
+          try { recognition.stop(); } catch(err) {}
+          resetarInterface();
+        }
+      } else {
+        mostrarErro("Erro", "Reconhecimento de voz não suportado neste navegador.");
       }
     } else {
-      // Parar Gravação
-      if (mediaRecorder && mediaRecorder.state !== "inactive") {
-        mediaRecorder.stop();
+      if (recognition) {
+        try { recognition.stop(); } catch (e) {}
       }
-      gravando = false;
-      vis.classList.remove('active');
+      resetarInterface();
     }
   });
 
-  async function enviarAudioParaTranscricao(blob) {
-    // Nota: Se o seu backend já aceitar o blob de áudio para STT (Whisper/Gemini Audio), você envia ele direto.
-    // Caso queira testar simulando texto por enquanto ou ajustar para sua rota de STT:
-    
-    // Simulando o fluxo direto de envio para a API principal com texto temporário 
-    // (Caso você já tenha uma rota de transcrição no backend, ajuste a rota abaixo para /api/transcrever)
-    
-    const formData = new FormData();
-    formData.append("file", blob, "audio.webm");
-
-    try {
-      // Exemplo se você enviar o audioBlob para o backend converter:
-      // const responseTranscribe = await fetch('/api/transcrever', { method: 'POST', body: formData });
-      // const dataTranscribe = await responseTranscribe.json();
-      // const transcricao = dataTranscribe.text;
-
-      // Como o foco principal era o envio via MediaRecorder, caso queira testar a rota padrão do Jarvis com texto direto:
-      let transcricao = "Teste de envio por MediaRecorder"; // Substitua pelo retorno real da sua API de transcrição
-      
-      adicionarMensagem('Você', transcricao);
-      statusText.innerText = 'Pensando...';
-      await enviarParaAPI(transcricao);
-
-    } catch (error) {
-      mostrarErro('Erro no Envio de Áudio', error.message);
-      statusText.innerText = 'Toque na esfera para gravar';
-    }
+  function resetarInterface() {
+    isOuvindo = false;
+    processando = false;
+    vis.classList.remove('active');
+    statusText.innerText = 'Toque na esfera para falar';
   }
 
   async function enviarParaAPI(mensagem) {
@@ -269,7 +269,7 @@
     } catch (error) {
       mostrarErro('Erro no Backend/Vercel', error.message);
       adicionarMensagem('Jarvis', "Desculpe, ocorreu um erro de conexão.");
-      statusText.innerText = 'Toque na esfera para gravar';
+      resetarInterface();
     }
   }
 
@@ -296,12 +296,12 @@
       playerDeAudio.volume = 1.0; 
 
       playerDeAudio.onended = () => {
-        statusText.innerText = 'Toque na esfera para gravar';
+        resetarInterface();
       };
 
       playerDeAudio.onerror = () => {
         mostrarErro('Erro no Arquivo de Áudio', 'O arquivo recebido não pôde ser tocado.');
-        statusText.innerText = 'Toque na esfera para gravar';
+        resetarInterface();
       };
 
       statusText.innerText = 'Jarvis falando...';
@@ -309,7 +309,7 @@
 
     } catch (error) {
       mostrarErro('Erro EasyVoice', error.message);
-      statusText.innerText = 'Toque na esfera para gravar';
+      resetarInterface();
     }
   }
 </script>
