@@ -227,7 +227,7 @@
     const url = `/api/jarvis`;
     
     try {
-      const response = alignFetch(url, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -236,19 +236,10 @@
         })
       });
       
-      const resFetch = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: PROMPT_SISTEMA }] },
-          contents: historico
-        })
-      });
+      const data = await response.json();
       
-      const data = await resFetch.json();
-      
-      if (!resFetch.ok) {
-        throw new Error(data.error || `HTTP Status ${resFetch.status}`);
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP Status ${response.status}`);
       }
 
       const respostaJarvis = data.candidates[0].content.parts[0].text;
