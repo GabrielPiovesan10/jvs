@@ -123,10 +123,9 @@
 <div class="container-topo">
   <div class="visualizer" id="jarvisVis" title="Toque para ativar/desativar"></div>
   <select id="seletor-voz">
-    <option value="af_aoede">Arabic / Padrão Livre (af_aoede)</option>
-    <option value="alloy">Alloy (Padrão OpenAI)</option>
-    <option value="echo">Echo (Masculino Limpo)</option>
-    <option value="fable">Fable (Neutro)</option>
+    <option value="af_aoede">Voz Principal (Padrão Livre)</option>
+    <option value="alloy">Alloy (Alternativa 1)</option>
+    <option value="echo">Echo (Alternativa 2)</option>
   </select>
   <div id="status">Toque na esfera para iniciar o Jarvis</div>
 </div>
@@ -148,7 +147,6 @@
   
   let isAtivo = false;
   let historico = []; 
-  let vozesDisponiveis = [];
   let recognition = null;
   const playerDeAudio = new Audio();
 
@@ -196,11 +194,8 @@
     };
 
     recognition.onend = () => {
-      // Se ainda estiver ativo mas o status não for de fala, tenta reiniciar de forma segura
       if (isAtivo && !statusText.innerText.includes('falando') && !statusText.innerText.includes('Pensando')) {
-        try {
-          recognition.start();
-        } catch(e) {}
+        try { recognition.start(); } catch(e) {}
       }
     };
   }
@@ -232,7 +227,7 @@
     const url = `/api/jarvis`;
     
     try {
-      const response = await fetch(url, {
+      const response = alignFetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -241,10 +236,19 @@
         })
       });
       
-      const data = await response.json();
+      const resFetch = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: PROMPT_SISTEMA }] },
+          contents: historico
+        })
+      });
       
-      if (!response.ok) {
-        throw new Error(data.error || `HTTP Status ${response.status}`);
+      const data = await resFetch.json();
+      
+      if (!resFetch.ok) {
+        throw new Error(data.error || `HTTP Status ${resFetch.status}`);
       }
 
       const respostaJarvis = data.candidates[0].content.parts[0].text;
@@ -258,23 +262,20 @@
       mostrarErro('Erro no Backend/Vercel', error.message);
       const msgErroVoz = "Desculpe, ocorreu um erro de conexão.";
       adicionarMensagem('Jarvis', msgErroVoz);
-      statusText.innerText = 'Ouvindo... Pode falar.';
-      if (recognition) {
-        try { recognition.start(); } catch(e) {}
-      }
+      reiniciarEscuta();
     }
   }
 
   async function falarEasyVoice(texto) {
     statusText.innerText = 'Jarvis gerando voz...';
     
-    const vozSelecionada = seletorVoz.value;
+    const vozEscolhida = seletorVoz.value;
     
     try {
       const response = await fetch('/api/easyvoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: texto, voice: vozSelecionada })
+        body: JSON.stringify({ text: texto, voice: vozEscolhida })
       });
 
       const contentType = response.headers.get('content-type');
@@ -294,18 +295,7 @@
       playerDeAudio.volume = 1.0; 
 
       playerDeAudio.onended = () => {
-        if (isAtivo) {
-          statusText.innerText = 'Ouvindo... Pode falar.';
-          setTimeout(() => {
-            if (isAtivo && recognition) {
-              try { 
-                recognition.start(); 
-              } catch(e) {
-                // Se já estiver rodando, ignora o erro
-              }
-            }
-          }, 400);
-        }
+        reiniciarEscuta();
       };
 
       playerDeAudio.onerror = () => {
