@@ -121,17 +121,17 @@
 <body>
 
 <div class="container-topo">
-  <div class="visualizer" id="jarvisVis" title="Toque para ativar/desativar"></div>
+  <div class="visualizer" id="jarvisVis" title="Toque para falar"></div>
   <select id="seletor-voz">
     <option value="ar_m1">Arabic Male 1 (ar_m1)</option>
     <option value="ar_f1">Arabic Female 1 (ar_f1)</option>
     <option value="af_aoede">Voz Padrão (af_aoede)</option>
   </select>
-  <div id="status">Toque na esfera para iniciar o Jarvis</div>
+  <div id="status">Toque na esfera para falar com o Jarvis</div>
 </div>
 
 <div id="chat-box">
-  <div class="mensagem jarvis">Olá, Gabriel! Toque na esfera para iniciar nossa conversa contínua.</div>
+  <div class="mensagem jarvis">Olá, Gabriel! Toque na esfera para falar comigo.</div>
 </div>
 
 <div id="painel-erros"><strong>LOG DE ERROS:</strong><br></div>
@@ -145,10 +145,8 @@
   const chatBox = document.getElementById('chat-box');
   const seletorVoz = document.getElementById('seletor-voz');
   
-  let isAtivo = false;
-  let estaFalandoOuPensando = false;
   let historico = []; 
-  let recognition = null;
+  let isOuvindo = false;
   const playerDeAudio = new Audio();
 
   function mostrarErro(contexto, erroMensagem) {
@@ -172,17 +170,33 @@
     chatBox.scrollTop = chatBox.scrollHeight;
   }
 
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (SpeechRecognition) {
-    recognition = new SpeechRecognition();
+  vis.addEventListener('click', () => {
+    if (isOuvindo) return;
+
+    // Destrava o áudio nativo mobile
+    playerDeAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+    playerDeAudio.play().catch(e => {});
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      mostrarErro("Erro", "Seu navegador não suporta reconhecimento de voz.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
     recognition.lang = 'pt-BR';
-    recognition.continuous = false; 
+    recognition.continuous = false;
     recognition.interimResults = false;
+
+    recognition.onstart = () => {
+      isOuvindo = true;
+      vis.classList.add('active');
+      statusText.innerText = 'Ouvindo... Pode falar.';
+    };
 
     recognition.onresult = async (event) => {
       const transcricao = event.results[0][0].transcript.trim();
       if (transcricao) {
-        estaFalandoOuPensando = true;
         adicionarMensagem('Você', transcricao);
         statusText.innerText = 'Pensando...';
         await enviarParaAPI(transcricao);
@@ -190,57 +204,34 @@
     };
 
     recognition.onerror = (event) => {
-      if (event.error === 'not-allowed') {
-        mostrarErro("Erro no Microfone", "Permissão negada.");
-        desativarJarvis();
-        return;
-      }
-      // Ignoramos erros de silêncio (no-speech) para o ciclo continuar natural
-      if (isAtivo && !estaFalandoOuPensando && event.error !== 'no-speech' && event.error !== 'aborted') {
+      if (event.error !== 'no-speech' && event.error !== 'aborted') {
         mostrarErro("Erro no Microfone", event.error);
       }
+      resetarEsfera();
     };
 
     recognition.onend = () => {
-      // Se o sistema ainda está ativo e não está processando/falando, reinicia a escuta de forma limpa
-      if (isAtivo && !estaFalandoOuPensando) {
-        try {
-          recognition.start();
-        } catch (e) {
-          // Ignora se já estiver rodando
-        }
+      // Se não passou para o estado de pensando/falando, reseta a esfera
+      if (statusText.innerText.includes('Ouvindo')) {
+        resetarEsfera();
       }
     };
-  }
 
-  function desativarJarvis() {
-    isAtivo = false;
-    estaFalandoOuPensando = false;
-    vis.classList.remove('active');
-    statusText.innerText = 'Jarvis em repouso. Toque para acordar.';
-    if (recognition) {
-      try { recognition.stop(); } catch(e) {}
-    }
-    playerDeAudio.pause();
-  }
-
-  vis.addEventListener('click', () => {
-    // Destrava o áudio nativo mobile
-    playerDeAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-    playerDeAudio.play().catch(e => {});
-
-    if (!isAtivo) {
-      isAtivo = true;
-      estaFalandoOuPensando = false;
-      vis.classList.add('active');
-      statusText.innerText = 'Ouvindo... Pode falar.';
-      if (recognition) {
-        try { recognition.start(); } catch(e) {}
-      }
-    } else {
-      desativarJarvis();
+    try {
+      recognition.start();
+    } catch (e) {
+      mostrarErro("Erro", e.message);
+      resetarEsfera();
     }
   });
+
+  function resetarEsfera() {
+    isOuvindo = false;
+    vis.classList.remove('active');
+    if (!statusText.innerText.includes('Jarvis falando') && !statusText.innerText.includes('Pensando')) {
+      statusText.innerText = 'Toque na esfera para falar';
+    }
+  }
 
   async function enviarParaAPI(mensagem) {
     historico.push({ role: "user", parts: [{ text: mensagem }] });
@@ -267,7 +258,7 @@
     } catch (error) {
       mostrarErro('Erro no Backend/Vercel', error.message);
       adicionarMensagem('Jarvis', "Desculpe, ocorreu um erro de conexão.");
-      retomarEscuta();
+      resetarEsfera();
     }
   }
 
@@ -294,12 +285,14 @@
       playerDeAudio.volume = 1.0; 
 
       playerDeAudio.onended = () => {
-        retomarEscuta();
+        statusText.innerText = 'Toque na esfera para falar';
+        isOuvindo = false;
       };
 
       playerDeAudio.onerror = () => {
         mostrarErro('Erro no Arquivo de Áudio', 'O arquivo recebido não pôde ser tocado.');
-        retomarEscuta();
+        statusText.innerText = 'Toque na esfera para falar';
+        isOuvindo = false;
       };
 
       statusText.innerText = 'Jarvis falando...';
@@ -307,19 +300,8 @@
 
     } catch (error) {
       mostrarErro('Erro EasyVoice', error.message);
-      retomarEscuta();
-    }
-  }
-
-  function retomarEscuta() {
-    estaFalandoOuPensando = false;
-    if (isAtivo) {
-      statusText.innerText = 'Ouvindo... Pode falar.';
-      try {
-        recognition.start();
-      } catch (e) {
-        // Se já estivesse escutando, ignora
-      }
+      statusText.innerText = 'Toque na esfera para falar';
+      isOuvindo = false;
     }
   }
 </script>
