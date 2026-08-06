@@ -23,34 +23,46 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin-top: 10px;
+    margin-top: 5px;
   }
   
   .visualizer {
-    width: 120px;
-    height: 120px;
+    width: 100px;
+    height: 100px;
     background: radial-gradient(circle, #ff4b4b 0%, #b30000 70%); 
     border-radius: 50%;
-    box-shadow: 0 0 30px #ff4b4b;
+    box-shadow: 0 0 25px #ff4b4b;
     transition: all 0.3s ease;
     cursor: pointer;
+    margin-bottom: 8px;
   }
   
   .visualizer.active {
     background: radial-gradient(circle, #00d2ff 0%, #3a7bd5 70%); 
-    box-shadow: 0 0 30px #00d2ff;
+    box-shadow: 0 0 25px #00d2ff;
     animation: pulsar 1.5s infinite;
   }
 
   @keyframes pulsar {
     0% { transform: scale(1); }
-    50% { transform: scale(1.08); }
+    50% { transform: scale(1.06); }
     100% { transform: scale(1); }
   }
 
+  #seletor-voz {
+    background-color: #222;
+    color: #00d2ff;
+    border: 1px solid #444;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-top: 5px;
+    outline: none;
+  }
+
   #status {
-    margin-top: 10px;
-    font-size: 15px;
+    margin-top: 5px;
+    font-size: 14px;
     color: #aaa;
     text-align: center;
   }
@@ -58,7 +70,7 @@
   #chat-box {
     width: 95%;
     max-width: 600px;
-    height: 50vh;
+    height: 48vh;
     background-color: #1a1a1a;
     border: 1px solid #333;
     border-radius: 10px;
@@ -96,12 +108,12 @@
     background-color: #2a0000;
     border: 1px solid #ff4b4b;
     border-radius: 8px;
-    padding: 10px;
+    padding: 8px;
     color: #ff9999;
     font-family: monospace;
-    font-size: 12px;
+    font-size: 11px;
     display: none;
-    max-height: 80px;
+    max-height: 70px;
     overflow-y: auto;
   }
 </style>
@@ -110,6 +122,12 @@
 
 <div class="container-topo">
   <div class="visualizer" id="jarvisVis" title="Toque para ativar/desativar"></div>
+  <select id="seletor-voz">
+    <option value="am_michael">Arabic Male (Estilo Envolvente)</option>
+    <option value="af_aoede">Af_Aoede (Padrão)</option>
+    <option value="am_adam">Adam (Masculino EUA)</option>
+    <option value="bm_daniel">Daniel (Masculino UK)</option>
+  </select>
   <div id="status">Toque na esfera para iniciar o Jarvis</div>
 </div>
 
@@ -126,13 +144,12 @@
   const statusText = document.getElementById('status');
   const painelErros = document.getElementById('painel-erros');
   const chatBox = document.getElementById('chat-box');
+  const seletorVoz = document.getElementById('seletor-voz');
   
   let isAtivo = false;
   let historico = []; 
   let vozesDisponiveis = [];
   let recognition = null;
-
-  // PLAYER GLOBAL: Essa é a chave para driblar o bloqueio do iPhone
   const playerDeAudio = new Audio();
 
   function carregarVozes() {
@@ -198,7 +215,6 @@
   }
 
   vis.addEventListener('click', () => {
-    // DESTRANCA O ÁUDIO AQUI: Toca um som mudo em base64 na exata hora do toque
     playerDeAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
     playerDeAudio.play().catch(e => console.log("Áudio de desbloqueio falhou", e));
 
@@ -264,11 +280,14 @@
   async function falarEasyVoice(texto) {
     statusText.innerText = 'Jarvis gerando voz premium...';
     
+    // Pega a voz selecionada no menu da tela
+    const vozSelecionada = seletorVoz.value;
+    
     try {
       const response = await fetch('/api/easyvoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: texto })
+        body: JSON.stringify({ text: texto, voice: vozSelecionada })
       });
 
       const contentType = response.headers.get('content-type');
@@ -284,20 +303,25 @@
       const blob = await response.blob();
       const audioUrl = URL.createObjectURL(blob);
       
-      // REUTILIZA O PLAYER GLOBAL que já foi destrancado lá em cima
       playerDeAudio.src = audioUrl;
+      playerDeAudio.volume = 1.0; 
 
       playerDeAudio.onended = () => {
         if (isAtivo) {
-          statusText.innerText = 'Ouvindo... Pode falar.';
-          if (recognition) {
-            try { recognition.start(); } catch(e) {}
-          }
+          statusText.innerText = 'Preparando microfone...';
+          setTimeout(() => {
+            if (isAtivo) {
+              statusText.innerText = 'Ouvindo... Pode falar.';
+              if (recognition) {
+                try { recognition.start(); } catch(e) {}
+              }
+            }
+          }, 1000); 
         }
       };
 
       playerDeAudio.onerror = () => {
-        mostrarErro('Erro no Arquivo de Áudio', 'O arquivo recebido não pôde ser tocado pelo navegador.');
+        mostrarErro('Erro no Arquivo de Áudio', 'O arquivo recebido não pôde ser tocado.');
         falarNativo(texto); 
       };
 
@@ -363,7 +387,7 @@
     utterance.onerror = (e) => {
       mostrarErro('Erro na Fala', e.error);
       if (isAtivo) {
-        statusText.innerText = 'Ouvindo... Pode falar.';
+        statusTest.innerText = 'Ouvindo... Pode falar.';
         if (recognition) {
           try { recognition.start(); } catch(e) {}
         }
