@@ -3,7 +3,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Método não permitido' });
   }
 
-  const { text } = req.body;
+  const { text, voice } = req.body;
   const apiKey = process.env.EASYVOICE_API_KEY;
 
   if (!apiKey) {
@@ -22,7 +22,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: "tts-1", 
         input: text,    
-        voice: "arabic_male_1" // Identificador da voz que você escolheu
+        voice: voice || "am_michael" // Usa a voz escolhida ou uma padrão segura
       })
     });
 
