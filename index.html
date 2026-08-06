@@ -171,14 +171,17 @@
     chatBox.scrollTop = chatBox.scrollHeight;
   }
 
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (SpeechRecognition) {
-    recognition = new SpeechRecognition();
-    recognition.lang = 'pt-BR';
-    recognition.continuous = false; 
-    recognition.interimResults = false;
+  // Função para criar uma instância limpa do Reconhecimento de Voz evitando conflitos de estado
+  function criarReconhecimento() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return null;
 
-    recognition.onresult = async (event) => {
+    const rec = new SpeechRecognition();
+    rec.lang = 'pt-BR';
+    rec.continuous = false; 
+    rec.interimResults = false;
+
+    rec.onresult = async (event) => {
       const transcricao = event.results[0][0].transcript.trim();
       if (transcricao) {
         adicionarMensagem('Você', transcricao);
@@ -187,51 +190,50 @@
       }
     };
 
-    recognition.onerror = (event) => {
+    rec.onerror = (event) => {
       if (event.error === 'not-allowed') {
-        mostrarErro("Erro no Microfone", "Permissão negada. Verifique se o navegador tem acesso ao microfone.");
-        isAtivo = false;
-        vis.classList.remove('active');
-        statusText.innerText = 'Permissão de microfone negada.';
+        mostrarErro("Erro no Microfone", "Permissão negada. Verifique o acesso ao microfone.");
+        desativarJarvis();
         return;
       }
-      
       if (isAtivo && event.error !== 'no-speech' && event.error !== 'aborted') {
         mostrarErro("Erro no Microfone", event.error);
       }
     };
 
-    recognition.onend = () => {
-      if (isAtivo && !statusText.innerText.includes('falando') && !statusText.innerText.includes('Pensando') && !statusText.innerText.includes('gerando')) {
-        reiniciarEscuta();
-      }
+    rec.onend = () => {
+      // O rec.onend é tratado pelo fluxo de áudio ou reinício controlado
     };
+
+    return rec;
+  }
+
+  function desativarJarvis() {
+    isAtivo = false;
+    vis.classList.remove('active');
+    statusText.innerText = 'Jarvis em repouso. Toque para acordar.';
+    if (recognition) {
+      try { recognition.stop(); } catch(e) {}
+    }
+    playerDeAudio.pause();
   }
 
   vis.addEventListener('click', () => {
-    // Desbloqueio imediato do player de áudio para o iOS/Android
+    // Desbloqueio de áudio obrigatório para mobile
     playerDeAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-    playerDeAudio.play().catch(e => console.log("Áudio de desbloqueio falhou", e));
+    playerDeAudio.play().catch(e => {});
 
-    isAtivo = !isAtivo;
-    if (isAtivo) {
+    if (!isAtivo) {
+      isAtivo = true;
       vis.classList.add('active');
       statusText.innerText = 'Ouvindo... Pode falar.';
       
+      recognition = criarReconhecimento();
       if (recognition) {
-        try { 
-          recognition.start(); 
-        } catch(e) {
-          console.log("Erro ao iniciar reconhecimento no clique:", e);
-        }
+        try { recognition.start(); } catch(e) {}
       }
     } else {
-      vis.classList.remove('active');
-      statusText.innerText = 'Jarvis em repouso. Toque para acordar.';
-      if (recognition) {
-        try { recognition.stop(); } catch(e) {}
-      }
-      playerDeAudio.pause();
+      desativarJarvis();
     }
   });
 
@@ -265,8 +267,7 @@
       
     } catch (error) {
       mostrarErro('Erro no Backend/Vercel', error.message);
-      const msgErroVoz = "Desculpe, ocorreu um erro de conexão.";
-      adicionarMensagem('Jarvis', msgErroVoz);
+      adicionarMensagem('Jarvis', "Desculpe, ocorreu um erro de conexão.");
       reiniciarEscuta();
     }
   }
@@ -286,7 +287,7 @@
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
         const errorData = await response.json();
-        throw new Error(`Erro escondido na API: ${JSON.stringify(errorData)}`);
+        throw new Error(`Erro na API: ${JSON.stringify(errorData)}`);
       }
 
       if (!response.ok) {
@@ -322,16 +323,27 @@
   }
 
   function reiniciarEscuta() {
-    if (isAtivo) {
-      statusText.innerText = 'Ouvindo... Pode falar.';
-      setTimeout(() => {
-        if (isAtivo && recognition) {
-          try { 
-            recognition.start(); 
-          } catch(e) {}
+    if (!isAtivo) return;
+
+    statusText.innerText = 'Ouvindo... Pode falar.';
+    
+    // Pequeno delay para garantir que o canal de áudio anterior fechou totalmente antes de reabrir o mic
+    setTimeout(() => {
+      if (!isAtivo) return;
+      
+      if (recognition) {
+        try { recognition.stop(); } catch(e) {}
+      }
+      
+      recognition = criarReconhecimento();
+      if (recognition) {
+        try { 
+          recognition.start(); 
+        } catch(e) {
+          console.log("Erro ao reiniciar escuta:", e);
         }
-      }, 300);
-    }
+      }
+    }, 600);
   }
 </script>
 
