@@ -148,7 +148,6 @@
   let isAtivo = false;
   let historico = []; 
   let recognition = null;
-  let micStream = null; // Mantém a instância do stream ativa para matar o delay
   const playerDeAudio = new Audio();
 
   function mostrarErro(contexto, erroMensagem) {
@@ -189,7 +188,14 @@
     };
 
     recognition.onerror = (event) => {
-      // Ignora erros comuns de silêncio ou abortagem manual
+      if (event.error === 'not-allowed') {
+        mostrarErro("Erro no Microfone", "Permissão negada. Verifique se o navegador tem acesso ao microfone.");
+        isAtivo = false;
+        vis.classList.remove('active');
+        statusText.innerText = 'Permissão de microfone negada.';
+        return;
+      }
+      
       if (isAtivo && event.error !== 'no-speech' && event.error !== 'aborted') {
         mostrarErro("Erro no Microfone", event.error);
       }
@@ -202,19 +208,8 @@
     };
   }
 
-  // Função para aquecer e destravar o microfone do navegador logo no primeiro toque
-  async function warmUpMicrophone() {
-    if (!micStream) {
-      try {
-        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      } catch (e) {
-        console.log("Aviso no aquecimento do microfone:", e);
-      }
-    }
-  }
-
-  vis.addEventListener('click', async () => {
-    // Destrava o fluxo de áudio do iOS/Android
+  vis.addEventListener('click', () => {
+    // Desbloqueio imediato do player de áudio para o iOS/Android
     playerDeAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
     playerDeAudio.play().catch(e => console.log("Áudio de desbloqueio falhou", e));
 
@@ -223,10 +218,12 @@
       vis.classList.add('active');
       statusText.innerText = 'Ouvindo... Pode falar.';
       
-      await warmUpMicrophone(); // Elimina o delay inicial de permissão/hardware
-
       if (recognition) {
-        try { recognition.start(); } catch(e) {}
+        try { 
+          recognition.start(); 
+        } catch(e) {
+          console.log("Erro ao iniciar reconhecimento no clique:", e);
+        }
       }
     } else {
       vis.classList.remove('active');
@@ -331,9 +328,7 @@
         if (isAtivo && recognition) {
           try { 
             recognition.start(); 
-          } catch(e) {
-            // Se já estivesse rodando, ignoramos o erro de conflito
-          }
+          } catch(e) {}
         }
       }, 300);
     }
