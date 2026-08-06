@@ -243,13 +243,51 @@
       
       historico.push({ role: "model", parts: [{ text: respostaJarvis }] });
       adicionarMensagem('Jarvis', respostaJarvis);
-      falarNativo(respostaJarvis);
+      
+      // Envia o texto gerado para a sua própria API segura chamar o EasyVoice
+      falarEasyVoice(respostaJarvis);
       
     } catch (error) {
       mostrarErro('Erro no Backend/Vercel', error.message);
       const msgErroVoz = "Desculpe, ocorreu um erro de conexão.";
       adicionarMensagem('Jarvis', msgErroVoz);
       falarNativo(msgErroVoz);
+    }
+  }
+
+  async function falarEasyVoice(texto) {
+    statusText.innerText = 'Jarvis gerando voz premium...';
+    
+    try {
+      const response = await fetch('/api/easyvoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: texto })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro na API do EasyVoice: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const audioUrl = URL.createObjectURL(blob);
+      const audio = new Audio(audioUrl);
+
+      audio.onended = () => {
+        if (isAtivo) {
+          statusText.innerText = 'Ouvindo... Pode falar.';
+          if (recognition) {
+            try { recognition.start(); } catch(e) {}
+          }
+        }
+      };
+
+      statusText.innerText = 'Jarvis falando...';
+      audio.play();
+
+    } catch (error) {
+      mostrarErro('Erro EasyVoice', error.message);
+      falarNativo(texto); 
     }
   }
 
@@ -266,7 +304,6 @@
       vozesDisponiveis = synth.getVoices();
     }
 
-    // Pega prioritariamente a Voz 1 / Siri do iOS ou alta qualidade do Google
     let vozHumana = vozesDisponiveis.find(v => 
       v.lang.includes('pt') && (
         v.name.includes('Voz 1') || 
