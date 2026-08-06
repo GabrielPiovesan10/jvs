@@ -244,7 +244,7 @@
       historico.push({ role: "model", parts: [{ text: respostaJarvis }] });
       adicionarMensagem('Jarvis', respostaJarvis);
       
-      // Envia o texto gerado para a sua própria API segura chamar o EasyVoice
+      // Chama a nova função com as travas de segurança
       falarEasyVoice(respostaJarvis);
       
     } catch (error) {
@@ -265,6 +265,13 @@
         body: JSON.stringify({ text: texto })
       });
 
+      // Verifica se a API mandou um JSON de erro disfarçado de sucesso
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const errorData = await response.json();
+        throw new Error(`Erro escondido na API: ${JSON.stringify(errorData)}`);
+      }
+
       if (!response.ok) {
         throw new Error(`Erro na API do EasyVoice: ${response.status}`);
       }
@@ -273,6 +280,7 @@
       const audioUrl = URL.createObjectURL(blob);
       const audio = new Audio(audioUrl);
 
+      // Quando o áudio acabar, volta a ouvir
       audio.onended = () => {
         if (isAtivo) {
           statusText.innerText = 'Ouvindo... Pode falar.';
@@ -282,8 +290,19 @@
         }
       };
 
+      // Se o arquivo de áudio vier corrompido
+      audio.onerror = () => {
+        mostrarErro('Erro no Arquivo de Áudio', 'O arquivo recebido não pôde ser tocado pelo navegador.');
+        falarNativo(texto); 
+      };
+
       statusText.innerText = 'Jarvis falando...';
-      audio.play();
+      
+      // Tenta tocar o áudio e captura se o navegador bloquear (Autoplay Policy)
+      audio.play().catch(erro => {
+        mostrarErro('Erro ao Tocar (Play)', erro.message);
+        falarNativo(texto);
+      });
 
     } catch (error) {
       mostrarErro('Erro EasyVoice', error.message);
