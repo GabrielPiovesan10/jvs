@@ -146,6 +146,7 @@
   const seletorVoz = document.getElementById('seletor-voz');
   
   let isAtivo = false;
+  let estaFalandoOuPensando = false;
   let historico = []; 
   let recognition = null;
   const playerDeAudio = new Audio();
@@ -171,45 +172,50 @@
     chatBox.scrollTop = chatBox.scrollHeight;
   }
 
-  // Função para criar uma instância limpa do Reconhecimento de Voz evitando conflitos de estado
-  function criarReconhecimento() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return null;
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.continuous = false; 
+    recognition.interimResults = false;
 
-    const rec = new SpeechRecognition();
-    rec.lang = 'pt-BR';
-    rec.continuous = false; 
-    rec.interimResults = false;
-
-    rec.onresult = async (event) => {
+    recognition.onresult = async (event) => {
       const transcricao = event.results[0][0].transcript.trim();
       if (transcricao) {
+        estaFalandoOuPensando = true;
         adicionarMensagem('Você', transcricao);
         statusText.innerText = 'Pensando...';
         await enviarParaAPI(transcricao);
       }
     };
 
-    rec.onerror = (event) => {
+    recognition.onerror = (event) => {
       if (event.error === 'not-allowed') {
-        mostrarErro("Erro no Microfone", "Permissão negada. Verifique o acesso ao microfone.");
+        mostrarErro("Erro no Microfone", "Permissão negada.");
         desativarJarvis();
         return;
       }
-      if (isAtivo && event.error !== 'no-speech' && event.error !== 'aborted') {
+      // Ignoramos erros de silêncio (no-speech) para o ciclo continuar natural
+      if (isAtivo && !estaFalandoOuPensando && event.error !== 'no-speech' && event.error !== 'aborted') {
         mostrarErro("Erro no Microfone", event.error);
       }
     };
 
-    rec.onend = () => {
-      // O rec.onend é tratado pelo fluxo de áudio ou reinício controlado
+    recognition.onend = () => {
+      // Se o sistema ainda está ativo e não está processando/falando, reinicia a escuta de forma limpa
+      if (isAtivo && !estaFalandoOuPensando) {
+        try {
+          recognition.start();
+        } catch (e) {
+          // Ignora se já estiver rodando
+        }
+      }
     };
-
-    return rec;
   }
 
   function desativarJarvis() {
     isAtivo = false;
+    estaFalandoOuPensando = false;
     vis.classList.remove('active');
     statusText.innerText = 'Jarvis em repouso. Toque para acordar.';
     if (recognition) {
@@ -219,16 +225,15 @@
   }
 
   vis.addEventListener('click', () => {
-    // Desbloqueio de áudio obrigatório para mobile
+    // Destrava o áudio nativo mobile
     playerDeAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
     playerDeAudio.play().catch(e => {});
 
     if (!isAtivo) {
       isAtivo = true;
+      estaFalandoOuPensando = false;
       vis.classList.add('active');
       statusText.innerText = 'Ouvindo... Pode falar.';
-      
-      recognition = criarReconhecimento();
       if (recognition) {
         try { recognition.start(); } catch(e) {}
       }
@@ -240,10 +245,8 @@
   async function enviarParaAPI(mensagem) {
     historico.push({ role: "user", parts: [{ text: mensagem }] });
 
-    const url = `/api/jarvis`;
-    
     try {
-      const response = await fetch(url, {
+      const response = await fetch(`/api/jarvis`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -253,13 +256,9 @@
       });
       
       const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || `HTTP Status ${response.status}`);
-      }
+      if (!response.ok) throw new Error(data.error || `HTTP Status ${response.status}`);
 
       const respostaJarvis = data.candidates[0].content.parts[0].text;
-      
       historico.push({ role: "model", parts: [{ text: respostaJarvis }] });
       adicionarMensagem('Jarvis', respostaJarvis);
       
@@ -268,13 +267,12 @@
     } catch (error) {
       mostrarErro('Erro no Backend/Vercel', error.message);
       adicionarMensagem('Jarvis', "Desculpe, ocorreu um erro de conexão.");
-      reiniciarEscuta();
+      retomarEscuta();
     }
   }
 
   async function falarEasyVoice(texto) {
     statusText.innerText = 'Jarvis gerando voz...';
-    
     const vozEscolhida = seletorVoz.value;
     
     try {
@@ -289,61 +287,40 @@
         const errorData = await response.json();
         throw new Error(`Erro na API: ${JSON.stringify(errorData)}`);
       }
-
-      if (!response.ok) {
-        throw new Error(`Erro na API do EasyVoice: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`Erro na API do EasyVoice: ${response.status}`);
 
       const blob = await response.blob();
-      const audioUrl = URL.createObjectURL(blob);
-      
-      playerDeAudio.src = audioUrl;
+      playerDeAudio.src = URL.createObjectURL(blob);
       playerDeAudio.volume = 1.0; 
 
       playerDeAudio.onended = () => {
-        reiniciarEscuta();
+        retomarEscuta();
       };
 
       playerDeAudio.onerror = () => {
         mostrarErro('Erro no Arquivo de Áudio', 'O arquivo recebido não pôde ser tocado.');
-        reiniciarEscuta();
+        retomarEscuta();
       };
 
       statusText.innerText = 'Jarvis falando...';
-      
-      playerDeAudio.play().catch(erro => {
-        mostrarErro('Erro ao Tocar (Play)', erro.message);
-        reiniciarEscuta();
-      });
+      await playerDeAudio.play();
 
     } catch (error) {
       mostrarErro('Erro EasyVoice', error.message);
-      reiniciarEscuta();
+      retomarEscuta();
     }
   }
 
-  function reiniciarEscuta() {
-    if (!isAtivo) return;
-
-    statusText.innerText = 'Ouvindo... Pode falar.';
-    
-    // Pequeno delay para garantir que o canal de áudio anterior fechou totalmente antes de reabrir o mic
-    setTimeout(() => {
-      if (!isAtivo) return;
-      
-      if (recognition) {
-        try { recognition.stop(); } catch(e) {}
+  function retomarEscuta() {
+    estaFalandoOuPensando = false;
+    if (isAtivo) {
+      statusText.innerText = 'Ouvindo... Pode falar.';
+      try {
+        recognition.start();
+      } catch (e) {
+        // Se já estivesse escutando, ignora
       }
-      
-      recognition = criarReconhecimento();
-      if (recognition) {
-        try { 
-          recognition.start(); 
-        } catch(e) {
-          console.log("Erro ao reiniciar escuta:", e);
-        }
-      }
-    }, 600);
+    }
   }
 </script>
 
