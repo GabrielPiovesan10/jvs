@@ -22,7 +22,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: "tts-1", 
         input: text,    
-        voice: "onyx" // Voz masculina padrão compatível com o endpoint
+        voice: "arabic_male_1" // Identificador da voz que você escolheu
       })
     });
 
