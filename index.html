@@ -1,323 +1,168 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Jarvis - GP Tech Digital</title>
-<style>
-  body {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    align-items: center;
-    height: 100vh;
-    background-color: #121212;
-    margin: 0;
-    color: #fff;
-    font-family: Arial, sans-serif;
-    box-sizing: border-box;
-    padding: 10px 0;
-  }
-
-  .container-topo {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin-top: 5px;
-  }
-  
-  .visualizer {
-    width: 100px;
-    height: 100px;
-    background: radial-gradient(circle, #ff4b4b 0%, #b30000 70%); 
-    border-radius: 50%;
-    box-shadow: 0 0 25px #ff4b4b;
-    transition: all 0.3s ease;
-    cursor: pointer;
-    margin-bottom: 8px;
-  }
-  
-  .visualizer.active {
-    background: radial-gradient(circle, #00d2ff 0%, #3a7bd5 70%); 
-    box-shadow: 0 0 25px #00d2ff;
-    animation: pulsar 1.5s infinite;
-  }
-
-  @keyframes pulsar {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.06); }
-    100% { transform: scale(1); }
-  }
-
-  #seletor-voz {
-    background-color: #222;
-    color: #00d2ff;
-    border: 1px solid #444;
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-size: 13px;
-    margin-top: 5px;
-    outline: none;
-  }
-
-  #status {
-    margin-top: 5px;
-    font-size: 14px;
-    color: #aaa;
-    text-align: center;
-  }
-
-  #chat-box {
-    width: 95%;
-    max-width: 600px;
-    height: 48vh;
-    background-color: #1a1a1a;
-    border: 1px solid #333;
-    border-radius: 10px;
-    padding: 12px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .mensagem {
-    padding: 10px 14px;
-    border-radius: 8px;
-    max-width: 85%;
-    font-size: 14px;
-    line-height: 1.4;
-    word-break: break-word;
-  }
-
-  .mensagem.user {
-    background-color: #2b3a42;
-    color: #00d2ff;
-    align-self: flex-end;
-  }
-
-  .mensagem.jarvis {
-    background-color: #2a2a2a;
-    color: #fff;
-    align-self: flex-start;
-  }
-
-  #painel-erros {
-    width: 95%;
-    max-width: 600px;
-    background-color: #2a0000;
-    border: 1px solid #ff4b4b;
-    border-radius: 8px;
-    padding: 8px;
-    color: #ff9999;
-    font-family: monospace;
-    font-size: 11px;
-    display: none;
-    max-height: 70px;
-    overflow-y: auto;
-  }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jarvis - GP Tech</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 480px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .status-box {
+            background: #1e1e1e;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 500;
+        }
+        .chat-box {
+            background: #1e1e1e;
+            padding: 15px;
+            border-radius: 8px;
+            min-height: 200px;
+            max-height: 400px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .message {
+            padding: 10px 14px;
+            border-radius: 6px;
+            max-width: 80%;
+        }
+        .user {
+            background: #0056b3;
+            align-self: flex-end;
+        }
+        .assistant {
+            background: #2a2a2a;
+            align-self: flex-start;
+        }
+        .sphere-btn {
+            background: radial-gradient(circle, #00d2ff 0%, #3a7bd5 100%);
+            border: none;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            cursor: pointer;
+            align-self: center;
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.5);
+            transition: transform 0.2s;
+        }
+        .sphere-btn:active {
+            transform: scale(0.95);
+        }
+        .error-log {
+            background: #2a0000;
+            color: #ff8080;
+            padding: 10px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
+            display: none;
+        }
+    </style>
 </head>
 <body>
 
-<div class="container-topo">
-  <div class="visualizer" id="jarvisVis" title="Toque para ativar/desativar"></div>
-  <select id="seletor-voz">
-    <option value="ar_m1">Arabic Male 1 (ar_m1)</option>
-    <option value="ar_f1">Arabic Female 1 (ar_f1)</option>
-    <option value="af_aoede">Voz Padrão (af_aoede)</option>
-  </select>
-  <div id="status">Toque na esfera para iniciar o Jarvis</div>
-</div>
+    <div class="container">
+        <div class="status-box" id="statusText">Toque na esfera para iniciar</div>
+        
+        <div class="chat-box" id="chatBox">
+            <div class="message assistant">Olá, Gabriel! Toque na esfera para iniciar nossa conversa contínua.</div>
+        </div>
 
-<div id="chat-box">
-  <div class="mensagem jarvis">Olá, Gabriel! Toque na esfera para iniciar nossa conversa contínua.</div>
-</div>
+        <button class="sphere-btn" id="micBtn" onclick="toggleListening()"></button>
 
-<div id="painel-erros"><strong>LOG DE ERROS:</strong><br></div>
+        <div class="error-log" id="errorLog"></div>
+    </div>
 
-<script>
-  const PROMPT_SISTEMA = "Você é o Jarvis, assistente virtual da GP Tech Digital. Aja como um parceiro humano de trabalho. Seja amigável, direto e tenha conversas fluidas. Mantenha suas respostas curtas, pois elas serão lidas em voz alta.";
-  
-  const vis = document.getElementById('jarvisVis');
-  const statusText = document.getElementById('status');
-  const painelErros = document.getElementById('painel-erros');
-  const chatBox = document.getElementById('chat-box');
-  const seletorVoz = document.getElementById('seletor-voz');
-  
-  let isAtivo = false;
-  let historico = []; 
-  let recognition = null;
-  const playerDeAudio = new Audio();
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let audioStream = null;
+        let isListening = false;
 
-  function mostrarErro(contexto, erroMensagem) {
-    console.error(contexto, erroMensagem);
-    painelErros.style.display = 'block';
-    painelErros.innerHTML += `> <b>${contexto}:</b> ${erroMensagem}<br><br>`;
-    painelErros.scrollTop = painelErros.scrollHeight;
-  }
+        const statusText = document.getElementById('statusText');
+        const errorLog = document.getElementById('errorLog');
 
-  function adicionarMensagem(remetente, texto) {
-    const div = document.createElement('div');
-    div.classList.add('mensagem');
-    if (remetente === 'Você') {
-      div.classList.add('user');
-      div.innerText = `Você: ${texto}`;
-    } else {
-      div.classList.add('jarvis');
-      div.innerText = `Jarvis: ${texto}`;
-    }
-    chatBox.appendChild(div);
-    chatBox.scrollTop = chatBox.scrollHeight;
-  }
-
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (SpeechRecognition) {
-    recognition = new SpeechRecognition();
-    recognition.lang = 'pt-BR';
-    recognition.continuous = false; 
-    recognition.interimResults = false;
-
-    recognition.onresult = async (event) => {
-      const transcricao = event.results[0][0].transcript.trim();
-      if (transcricao) {
-        adicionarMensagem('Você', transcricao);
-        statusText.innerText = 'Pensando...';
-        await enviarParaAPI(transcricao);
-      }
-    };
-
-    recognition.onerror = (event) => {
-      if (isAtivo && event.error !== 'no-speech' && event.error !== 'aborted') {
-        mostrarErro("Erro no Microfone", event.error);
-      }
-    };
-
-    recognition.onend = () => {
-      if (isAtivo && !statusText.innerText.includes('falando') && !statusText.innerText.includes('Pensando')) {
-        try { recognition.start(); } catch(e) {}
-      }
-    };
-  }
-
-  vis.addEventListener('click', () => {
-    playerDeAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-    playerDeAudio.play().catch(e => console.log("Áudio de desbloqueio falhou", e));
-
-    isAtivo = !isAtivo;
-    if (isAtivo) {
-      vis.classList.add('active');
-      statusText.innerText = 'Ouvindo... Pode falar.';
-      if (recognition) {
-        try { recognition.start(); } catch(e) {}
-      }
-    } else {
-      vis.classList.remove('active');
-      statusText.innerText = 'Jarvis em repouso. Toque para acordar.';
-      if (recognition) {
-        try { recognition.stop(); } catch(e) {}
-      }
-      playerDeAudio.pause();
-    }
-  });
-
-  async function enviarParaAPI(mensagem) {
-    historico.push({ role: "user", parts: [{ text: mensagem }] });
-
-    const url = `/api/jarvis`;
-    
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: PROMPT_SISTEMA }] },
-          contents: historico
-        })
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || `HTTP Status ${response.status}`);
-      }
-
-      const respostaJarvis = data.candidates[0].content.parts[0].text;
-      
-      historico.push({ role: "model", parts: [{ text: respostaJarvis }] });
-      adicionarMensagem('Jarvis', respostaJarvis);
-      
-      falarEasyVoice(respostaJarvis);
-      
-    } catch (error) {
-      mostrarErro('Erro no Backend/Vercel', error.message);
-      const msgErroVoz = "Desculpe, ocorreu um erro de conexão.";
-      adicionarMensagem('Jarvis', msgErroVoz);
-      reiniciarEscuta();
-    }
-  }
-
-  async function falarEasyVoice(texto) {
-    statusText.innerText = 'Jarvis gerando voz...';
-    
-    const vozEscolhida = seletorVoz.value;
-    
-    try {
-      const response = await fetch('/api/easyvoice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: texto, voice: vozEscolhida })
-      });
-
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const errorData = await response.json();
-        throw new Error(`Erro escondido na API: ${JSON.stringify(errorData)}`);
-      }
-
-      if (!response.ok) {
-        throw new Error(`Erro na API do EasyVoice: ${response.status}`);
-      }
-
-      const blob = await response.blob();
-      const audioUrl = URL.createObjectURL(blob);
-      
-      playerDeAudio.src = audioUrl;
-      playerDeAudio.volume = 1.0; 
-
-      playerDeAudio.onended = () => {
-        reiniciarEscuta();
-      };
-
-      playerDeAudio.onerror = () => {
-        mostrarErro('Erro no Arquivo de Áudio', 'O arquivo recebido não pôde ser tocado.');
-        reiniciarEscuta();
-      };
-
-      statusText.innerText = 'Jarvis falando...';
-      
-      playerDeAudio.play().catch(erro => {
-        mostrarErro('Erro ao Tocar (Play)', erro.message);
-        reiniciarEscuta();
-      });
-
-    } catch (error) {
-      mostrarErro('Erro EasyVoice', error.message);
-      reiniciarEscuta();
-    }
-  }
-
-  function reiniciarEscuta() {
-    if (isAtivo) {
-      statusText.innerText = 'Ouvindo... Pode falar.';
-      setTimeout(() => {
-        if (isAtivo && recognition) {
-          try { recognition.start(); } catch(e) {}
+        // Pré-inicializa o microfone para matar o delay no primeiro clique
+        async function initMicrophone() {
+            if (audioStream) return true;
+            try {
+                audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                return true;
+            } catch (error) {
+                console.error("Erro no Microfone:", error);
+                showError("Erro no Microfone: audio-capture");
+                return false;
+            }
         }
-      }, 400);
-    }
-  }
-</script>
 
+        async function toggleListening() {
+            if (!isListening) {
+                const ready = await initMicrophone();
+                if (!ready) return;
+
+                audioChunks = [];
+                try {
+                    // Reutiliza o stream já autorizado
+                    mediaRecorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
+
+                    mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            audioChunks.push(event.data);
+                        }
+                    };
+
+                    mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        processAudioOutput(audioBlob);
+                    };
+
+                    mediaRecorder.start();
+                    isListening = true;
+                    statusText.innerText = "Ouvindo... Pode falar.";
+                    errorLog.style.display = 'none';
+                } catch (err) {
+                    showError("Erro ao iniciar gravação: " + err.message);
+                }
+            } else {
+                if (mediaRecorder && mediaRecorder.state !== "inactive") {
+                    mediaRecorder.stop();
+                }
+                isListening = false;
+                statusText.innerText = "Processando áudio...";
+            }
+        }
+
+        function processAudioOutput(blob) {
+            // Aqui entra a lógica de envio do blob para o seu backend
+            console.log("Áudio gravado com sucesso, tamanho:", blob.size);
+            statusText.innerText = "Toque na esfera para falar novamente";
+        }
+
+        function showError(message) {
+            errorLog.innerText = `> ${message}`;
+            errorLog.style.display = 'block';
+            statusText.innerText = "Erro na captura";
+            isListening = false;
+        }
+    </script>
 </body>
 </html>
