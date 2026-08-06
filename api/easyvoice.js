@@ -1,8 +1,9 @@
 export default async function handler(req, res) {
-  if (req.method !== 'POST' && req.method !== 'GET') {
+  if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Método não permitido' });
   }
 
+  const { text, voice } = req.body;
   const apiKey = process.env.EASYVOICE_API_KEY;
 
   if (!apiKey) {
@@ -10,25 +11,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Se você acessar /api/easyvoice pelo navegador, ele lista as vozes disponíveis na sua chave
-    if (req.method === 'GET') {
-      const responseVozes = await fetch('https://easyvoice.ae/api/v1/voices', {
-        headers: { 'Authorization': `Bearer ${apiKey}` }
-      });
-      
-      if (!responseVozes.ok) {
-        throw new Error(`Erro ao buscar vozes: Status ${responseVozes.status}`);
-      }
-      
-      const dadosVozes = await responseVozes.json();
-      return res.status(200).json(dadosVozes);
-    }
-
-    // Se for POST, gera o áudio normalmente (usando 'af_aoede' ou a voz que passar)
-    const { text, voice } = req.body;
-    const urlDaApi = 'https://easyvoice.ae/api/v1/audio/speech';
-
-    const response = await fetch(urlDaApi, {
+    const response = await fetch('https://easyvoice.ae/api/v1/audio/speech', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
