@@ -132,6 +132,9 @@
   let vozesDisponiveis = [];
   let recognition = null;
 
+  // PLAYER GLOBAL: Essa é a chave para driblar o bloqueio do iPhone
+  const playerDeAudio = new Audio();
+
   function carregarVozes() {
     if ('speechSynthesis' in window) {
       vozesDisponiveis = window.speechSynthesis.getVoices();
@@ -195,6 +198,10 @@
   }
 
   vis.addEventListener('click', () => {
+    // DESTRANCA O ÁUDIO AQUI: Toca um som mudo em base64 na exata hora do toque
+    playerDeAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+    playerDeAudio.play().catch(e => console.log("Áudio de desbloqueio falhou", e));
+
     const synth = window.speechSynthesis;
     if (synth) {
       const dummy = new SpeechSynthesisUtterance('');
@@ -244,7 +251,6 @@
       historico.push({ role: "model", parts: [{ text: respostaJarvis }] });
       adicionarMensagem('Jarvis', respostaJarvis);
       
-      // Chama a nova função com as travas de segurança
       falarEasyVoice(respostaJarvis);
       
     } catch (error) {
@@ -265,7 +271,6 @@
         body: JSON.stringify({ text: texto })
       });
 
-      // Verifica se a API mandou um JSON de erro disfarçado de sucesso
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
         const errorData = await response.json();
@@ -278,10 +283,11 @@
 
       const blob = await response.blob();
       const audioUrl = URL.createObjectURL(blob);
-      const audio = new Audio(audioUrl);
+      
+      // REUTILIZA O PLAYER GLOBAL que já foi destrancado lá em cima
+      playerDeAudio.src = audioUrl;
 
-      // Quando o áudio acabar, volta a ouvir
-      audio.onended = () => {
+      playerDeAudio.onended = () => {
         if (isAtivo) {
           statusText.innerText = 'Ouvindo... Pode falar.';
           if (recognition) {
@@ -290,16 +296,14 @@
         }
       };
 
-      // Se o arquivo de áudio vier corrompido
-      audio.onerror = () => {
+      playerDeAudio.onerror = () => {
         mostrarErro('Erro no Arquivo de Áudio', 'O arquivo recebido não pôde ser tocado pelo navegador.');
         falarNativo(texto); 
       };
 
       statusText.innerText = 'Jarvis falando...';
       
-      // Tenta tocar o áudio e captura se o navegador bloquear (Autoplay Policy)
-      audio.play().catch(erro => {
+      playerDeAudio.play().catch(erro => {
         mostrarErro('Erro ao Tocar (Play)', erro.message);
         falarNativo(texto);
       });
